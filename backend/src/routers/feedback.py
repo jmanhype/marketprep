@@ -265,11 +265,11 @@ def get_feedback_stats(
 
     return FeedbackStats(
         total_feedback_count=total_count,
-        avg_rating=round(avg_rating, 2) if avg_rating else None,
-        accuracy_rate=round(accuracy_rate, 2) if accuracy_rate else None,
-        overstock_rate=round(overstock_rate, 2) if overstock_rate else None,
-        understock_rate=round(understock_rate, 2) if understock_rate else None,
-        avg_variance_percentage=round(avg_variance, 2) if avg_variance else None,
+        avg_rating=round(avg_rating, 2) if avg_rating is not None else None,
+        accuracy_rate=round(accuracy_rate, 2) if accuracy_rate is not None else None,
+        overstock_rate=round(overstock_rate, 2) if overstock_rate is not None else None,
+        understock_rate=round(understock_rate, 2) if understock_rate is not None else None,
+        avg_variance_percentage=round(avg_variance, 2) if avg_variance is not None else None,
     )
 
 
