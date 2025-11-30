@@ -6,6 +6,7 @@ Handles:
 - Square inventory webhooks (if applicable)
 """
 
+from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 import stripe
@@ -168,8 +169,6 @@ async def handle_subscription_updated(event, stripe_service: StripeService, db: 
     ).first()
 
     if subscription:
-        from datetime import datetime
-
         subscription.status = subscription_data['status']
         subscription.current_period_start = datetime.fromtimestamp(subscription_data['current_period_start'])
         subscription.current_period_end = datetime.fromtimestamp(subscription_data['current_period_end'])
@@ -195,8 +194,6 @@ async def handle_subscription_deleted(event, stripe_service: StripeService, db: 
     ).first()
 
     if subscription:
-        from datetime import datetime
-
         subscription.status = 'canceled'
         subscription.canceled_at = datetime.utcnow()
         db.commit()
