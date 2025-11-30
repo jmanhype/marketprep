@@ -38,8 +38,7 @@ export function FeedbackForm({
     setMessage('');
 
     try {
-      await apiClient.post('/api/v1/feedback', {
-        recommendation_id: recommendationId,
+      await apiClient.put(`/api/v1/recommendations/${recommendationId}/feedback`, {
         ...formData,
       });
 
