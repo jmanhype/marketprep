@@ -344,3 +344,83 @@ class TestEnhancedEventsService:
             assert result["fetched"] == 0
             assert "error" in result
             assert "Network timeout" in result["error"]
+
+    def test_calculate_attendance_impact_large_special(self):
+        """Test attendance impact for 2000-4999 special event - line 198."""
+        service = EnhancedEventsService(uuid4(), MagicMock())
+
+        result = service.calculate_attendance_impact({
+            "expected_attendance": 3000,
+            "is_special": True
+        })
+
+        # 1.5 (special) * 1.5 (large attendance 2000-4999) = 2.25
+        assert result == pytest.approx(2.25)
+
+    def test_get_event_for_date_with_database_event(self, mock_db, vendor_id):
+        """Test get_event_for_date with database event - lines 108-110, 321-341."""
+        service = EnhancedEventsService(vendor_id, mock_db)
+
+        # Mock database event
+        mock_event = MagicMock()
+        mock_event.name = "Database Event"
+        mock_event.expected_attendance = 800
+        mock_event.is_special = True
+        mock_event.location = "Convention Center"
+
+        # Mock query to return event
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = [mock_event]
+
+        result = service.get_event_for_date(datetime(2025, 6, 15))
+
+        # Verify it returned the database event (covers lines 108-110, 321-341)
+        assert result is not None
+        assert result["name"] == "Database Event"
+        assert result["expected_attendance"] == 800
+        assert result["is_special"] is True
+
+    def test_get_event_for_date_fallback_to_hardcoded(self, mock_db, vendor_id):
+        """Test get_event_for_date falling back to hardcoded dates - lines 112-113."""
+        service = EnhancedEventsService(vendor_id, mock_db)
+
+        # Mock query to return no events
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = []
+
+        # Query for Christmas (hardcoded special date)
+        result = service.get_event_for_date(datetime(2025, 12, 25))
+
+        # Should fall back to fallback_service (covers lines 112-113)
+        assert result is not None
+        assert result["is_special"] is True
+        assert "Christmas" in result["name"]
+
+    def test_find_events_near_location_no_nearby_events(self, mock_db, vendor_id):
+        """Test find_events_near_location with no nearby events - line 164."""
+        service = EnhancedEventsService(vendor_id, mock_db)
+
+        # Mock event data that's too far away (>10 miles)
+        mock_event = MagicMock()
+        mock_event.latitude = 41.0  # Far from search location
+        mock_event.longitude = -75.0
+
+        # Mock query
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = [mock_event]
+
+        # Call with NYC coordinates
+        result = service.find_events_near_location(
+            lat=40.7128,
+            lon=-74.0060,
+            target_date=datetime(2025, 6, 15),
+        )
+
+        # Should return None when no events within radius (covers line 164)
+        assert result is None
