@@ -40,47 +40,44 @@ class TestListProducts:
     @pytest.fixture
     def sample_products(self, vendor_id):
         """Sample product data."""
-        return [
-            MagicMock(
-                spec=Product,
-                id=uuid4(),
-                vendor_id=vendor_id,
-                name="Product A",
-                description="Description A",
-                price=Decimal("10.50"),
-                category="Category1",
-                is_active=True,
-                is_seasonal=False,
-                square_item_id="square_123",
-                square_synced_at=datetime(2025, 1, 1, 12, 0, 0),
-            ),
-            MagicMock(
-                spec=Product,
-                id=uuid4(),
-                vendor_id=vendor_id,
-                name="Product B",
-                description="Description B",
-                price=Decimal("20.00"),
-                category="Category2",
-                is_active=True,
-                is_seasonal=True,
-                square_item_id="square_456",
-                square_synced_at=None,
-            ),
-            MagicMock(
-                spec=Product,
-                id=uuid4(),
-                vendor_id=vendor_id,
-                name="Product C",
-                description=None,
-                price=Decimal("15.75"),
-                category="Category1",
-                is_active=False,
-                is_seasonal=False,
-                square_item_id=None,
-                square_synced_at=None,
-            ),
-        ]
+        # Create mocks with properly configured attributes
+        product_a = MagicMock(spec=Product)
+        product_a.id = uuid4()
+        product_a.vendor_id = vendor_id
+        product_a.name = "Product A"
+        product_a.description = "Description A"
+        product_a.price = Decimal("10.50")
+        product_a.category = "Category1"
+        product_a.is_active = True
+        product_a.is_seasonal = False
+        product_a.square_item_id = "square_123"
+        product_a.square_synced_at = datetime(2025, 1, 1, 12, 0, 0)
+
+        product_b = MagicMock(spec=Product)
+        product_b.id = uuid4()
+        product_b.vendor_id = vendor_id
+        product_b.name = "Product B"
+        product_b.description = "Description B"
+        product_b.price = Decimal("20.00")
+        product_b.category = "Category2"
+        product_b.is_active = True
+        product_b.is_seasonal = True
+        product_b.square_item_id = "square_456"
+        product_b.square_synced_at = None
+
+        product_c = MagicMock(spec=Product)
+        product_c.id = uuid4()
+        product_c.vendor_id = vendor_id
+        product_c.name = "Product C"
+        product_c.description = None
+        product_c.price = Decimal("15.75")
+        product_c.category = "Category1"
+        product_c.is_active = False
+        product_c.is_seasonal = False
+        product_c.square_item_id = None
+        product_c.square_synced_at = None
+
+        return [product_a, product_b, product_c]
 
     def test_list_all_products(self, mock_db, vendor_id, sample_products):
         """Test listing all products."""
@@ -331,19 +328,18 @@ class TestGetProduct:
     @pytest.fixture
     def sample_product(self, product_id, vendor_id):
         """Sample product."""
-        return MagicMock(
-            spec=Product,
-            id=product_id,
-            vendor_id=vendor_id,
-            name="Test Product",
-            description="Test Description",
-            price=Decimal("25.99"),
-            category="TestCategory",
-            is_active=True,
-            is_seasonal=False,
-            square_item_id="square_789",
-            square_synced_at=datetime(2025, 1, 15, 10, 30, 0),
-        )
+        product = MagicMock(spec=Product)
+        product.id = product_id
+        product.vendor_id = vendor_id
+        product.name = "Test Product"
+        product.description = "Test Description"
+        product.price = Decimal("25.99")
+        product.category = "TestCategory"
+        product.is_active = True
+        product.is_seasonal = False
+        product.square_item_id = "square_789"
+        product.square_synced_at = datetime(2025, 1, 15, 10, 30, 0)
+        return product
 
     def test_get_product_success(self, mock_db, vendor_id, product_id, sample_product):
         """Test getting product by ID."""
@@ -427,19 +423,17 @@ class TestGetProduct:
 
     def test_get_product_with_null_fields(self, mock_db, vendor_id, product_id):
         """Test getting product with null optional fields."""
-        product = MagicMock(
-            spec=Product,
-            id=product_id,
-            vendor_id=vendor_id,
-            name="Minimal Product",
-            description=None,
-            price=Decimal("10.00"),
-            category=None,
-            is_active=True,
-            is_seasonal=False,
-            square_item_id=None,
-            square_synced_at=None,
-        )
+        product = MagicMock(spec=Product)
+        product.id = product_id
+        product.vendor_id = vendor_id
+        product.name = "Minimal Product"
+        product.description = None
+        product.price = Decimal("10.00")
+        product.category = None
+        product.is_active = True
+        product.is_seasonal = False
+        product.square_item_id = None
+        product.square_synced_at = None
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
