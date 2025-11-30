@@ -42,6 +42,12 @@ def db_session(test_engine) -> Generator[Session, None, None]:
         session.close()
 
 
+@pytest.fixture(scope="function")
+def db(db_session) -> Generator[Session, None, None]:
+    """Alias for db_session fixture (used by integration tests)."""
+    yield db_session
+
+
 @pytest.fixture(scope="module")
 def test_client() -> Generator[TestClient, None, None]:
     """Create FastAPI test client."""
