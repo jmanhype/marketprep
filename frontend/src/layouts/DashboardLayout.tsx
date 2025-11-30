@@ -13,6 +13,7 @@ export function DashboardLayout() {
   const navigation = [
     { name: 'Dashboard', path: ROUTES.HOME },
     { name: 'Products', path: ROUTES.PRODUCTS },
+    { name: 'Venues', path: ROUTES.VENUES },
     { name: 'Recommendations', path: ROUTES.RECOMMENDATIONS },
     { name: 'Settings', path: ROUTES.SETTINGS },
   ];

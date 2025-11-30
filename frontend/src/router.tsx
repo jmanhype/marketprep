@@ -24,6 +24,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const ProductsPage = lazy(() => import('./pages/ProductsPage').then(m => ({ default: m.ProductsPage })));
+const VenuesPage = lazy(() => import('./pages/VenuesPage').then(m => ({ default: m.VenuesPage })));
 const RecommendationsPage = lazy(() => import('./pages/RecommendationsPage').then(m => ({ default: m.RecommendationsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const SquareSettingsPage = lazy(() => import('./pages/SquareSettingsPage').then(m => ({ default: m.SquareSettingsPage })));
@@ -64,6 +65,14 @@ export const router = createBrowserRouter([
             element: (
               <LazyPage>
                 <ProductsPage />
+              </LazyPage>
+            ),
+          },
+          {
+            path: 'venues',
+            element: (
+              <LazyPage>
+                <VenuesPage />
               </LazyPage>
             ),
           },
@@ -131,6 +140,7 @@ export const ROUTES = {
   LOGIN: '/auth/login',
   REGISTER: '/auth/register',
   PRODUCTS: '/products',
+  VENUES: '/venues',
   RECOMMENDATIONS: '/recommendations',
   SETTINGS: '/settings',
 } as const;
