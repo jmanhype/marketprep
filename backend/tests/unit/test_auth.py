@@ -444,3 +444,78 @@ class TestTokenRefreshWorkflow:
                 refresh_token=access_token,
                 email=email,
             )
+
+
+class TestAuthServiceInit:
+    """Test AuthService initialization and security validation."""
+
+    def test_auth_service_rejects_short_secret_key(self) -> None:
+        """AuthService should reject secret keys shorter than 32 characters."""
+        from src.config import settings
+        from unittest.mock import patch
+
+        # Mock settings with short secret key
+        with patch.object(settings, 'secret_key', 'too_short_key_12345'):
+            with pytest.raises(ValueError) as exc_info:
+                AuthService()
+
+            assert "32 characters" in str(exc_info.value)
+
+
+class TestGetVendorIdFromToken:
+    """Test vendor ID extraction with error handling."""
+
+    def test_get_vendor_id_from_token_missing_claim(self) -> None:
+        """Token missing vendor_id claim should raise InvalidTokenError."""
+        from src.services.auth_service import InvalidTokenError
+        from jose import jwt
+
+        auth_service = AuthService()
+
+        # Create token without vendor_id claim
+        payload = {
+            "email": "test@example.com",
+            "token_type": "access",
+            "exp": int((datetime.utcnow() + timedelta(minutes=15)).timestamp()),
+        }
+
+        token = jwt.encode(
+            claims=payload,
+            key=auth_service.secret_key,
+            algorithm=auth_service.ALGORITHM,
+        )
+
+        with pytest.raises(InvalidTokenError) as exc_info:
+            auth_service.get_vendor_id_from_token(token)
+
+        assert "vendor_id" in str(exc_info.value).lower()
+
+    def test_get_vendor_id_from_expired_token(self) -> None:
+        """Expired token should raise TokenExpiredError in get_vendor_id_from_token."""
+        from src.services.auth_service import TokenExpiredError
+
+        vendor_id = uuid4()
+        auth_service = AuthService()
+
+        # Generate token in the past
+        with freeze_time("2025-01-15 12:00:00"):
+            token = auth_service.generate_access_token(
+                vendor_id=vendor_id,
+                email="test@example.com",
+            )
+
+        # Try to extract vendor_id after expiration
+        with freeze_time("2025-01-15 12:30:00"):  # 30 minutes later
+            with pytest.raises(TokenExpiredError):
+                auth_service.get_vendor_id_from_token(token)
+
+    def test_get_vendor_id_from_malformed_token(self) -> None:
+        """Malformed token should raise InvalidTokenError in get_vendor_id_from_token."""
+        from src.services.auth_service import InvalidTokenError
+
+        auth_service = AuthService()
+
+        malformed_token = "not.a.valid.jwt"
+
+        with pytest.raises(InvalidTokenError):
+            auth_service.get_vendor_id_from_token(malformed_token)
