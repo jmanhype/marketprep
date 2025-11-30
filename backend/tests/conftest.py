@@ -15,7 +15,7 @@ def test_settings() -> Settings:
     return Settings(
         database_url="postgresql://marketprep:devpassword@localhost:5432/marketprep_test",
         redis_url="redis://localhost:6379/15",  # Separate Redis DB for tests
-        environment="testing",
+        environment="development",  # Must be development|staging|production
         debug=True,
     )
 

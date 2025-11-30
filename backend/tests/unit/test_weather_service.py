@@ -42,13 +42,14 @@ class TestWeatherService:
     async def test_get_forecast_success(self, weather_service, mock_weather_response):
         """Test successful weather forecast retrieval."""
         with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = mock_weather_response
+            mock_response.json = MagicMock(return_value=mock_weather_response)
 
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            mock_get = AsyncMock(return_value=mock_response)
+            mock_client_instance = AsyncMock()
+            mock_client_instance.get = mock_get
+            mock_client.return_value.__aenter__.return_value = mock_client_instance
 
             result = await weather_service.get_forecast(
                 lat=37.7749,
@@ -66,13 +67,14 @@ class TestWeatherService:
     async def test_get_forecast_api_error(self, weather_service):
         """Test weather forecast with API error falls back to defaults."""
         with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 500
             mock_response.text = "Internal Server Error"
 
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            mock_get = AsyncMock(return_value=mock_response)
+            mock_client_instance = AsyncMock()
+            mock_client_instance.get = mock_get
+            mock_client.return_value.__aenter__.return_value = mock_client_instance
 
             result = await weather_service.get_forecast(
                 lat=37.7749,
@@ -102,9 +104,10 @@ class TestWeatherService:
     async def test_get_forecast_network_error(self, weather_service):
         """Test weather forecast with network error falls back to defaults."""
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                side_effect=Exception("Network error")
-            )
+            mock_get = AsyncMock(side_effect=Exception("Network error"))
+            mock_client_instance = AsyncMock()
+            mock_client_instance.get = mock_get
+            mock_client.return_value.__aenter__.return_value = mock_client_instance
 
             result = await weather_service.get_forecast(
                 lat=37.7749,
@@ -119,13 +122,14 @@ class TestWeatherService:
     async def test_get_forecast_malformed_response(self, weather_service):
         """Test weather forecast with malformed API response."""
         with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
+            mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = {"error": "invalid"}
+            mock_response.json = MagicMock(return_value={"error": "invalid"})
 
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+            mock_get = AsyncMock(return_value=mock_response)
+            mock_client_instance = AsyncMock()
+            mock_client_instance.get = mock_get
+            mock_client.return_value.__aenter__.return_value = mock_client_instance
 
             result = await weather_service.get_forecast(
                 lat=37.7749,
@@ -160,7 +164,7 @@ class TestWeatherService:
         ]
 
         for api_condition, expected_condition in test_cases:
-            mock_response = {
+            mock_response_data = {
                 "list": [
                     {
                         "main": {"temp": 70, "feels_like": 70, "humidity": 50},
@@ -170,13 +174,14 @@ class TestWeatherService:
             }
 
             with patch("httpx.AsyncClient") as mock_client:
-                mock_resp = AsyncMock()
+                mock_resp = MagicMock()
                 mock_resp.status_code = 200
-                mock_resp.json.return_value = mock_response
+                mock_resp.json = MagicMock(return_value=mock_response_data)
 
-                mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                    return_value=mock_resp
-                )
+                mock_get = AsyncMock(return_value=mock_resp)
+                mock_client_instance = AsyncMock()
+                mock_client_instance.get = mock_get
+                mock_client.return_value.__aenter__.return_value = mock_client_instance
 
                 result = await weather_service.get_forecast(lat=37.7749, lon=-122.4194)
                 assert result["condition"] == expected_condition.lower()
