@@ -126,6 +126,22 @@ Include this ID when reporting issues.
             "description": "Local event tracking and management",
         },
         {
+            "name": "venues",
+            "description": "Market venue management and tracking",
+        },
+        {
+            "name": "vendors",
+            "description": "Vendor profile and account management",
+        },
+        {
+            "name": "audit",
+            "description": "Audit logs and compliance verification",
+        },
+        {
+            "name": "webhooks",
+            "description": "External service webhooks (Stripe, etc.)",
+        },
+        {
             "name": "monitoring",
             "description": "Health checks and metrics for monitoring",
         },
@@ -170,13 +186,31 @@ app.add_middleware(RateLimitMiddleware)
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
 
 # Import routers
-from src.routers import square, products, sales, recommendations, feedback, events, monitoring
+from src.routers import (
+    square,
+    products,
+    sales,
+    recommendations,
+    feedback,
+    events,
+    monitoring,
+    vendors,
+    venues,
+    audit,
+    webhooks,
+)
+
+# API v1 routers (with /api/v1 prefix)
 app.include_router(square.router, prefix=settings.api_v1_prefix)
 app.include_router(products.router, prefix=settings.api_v1_prefix)
 app.include_router(sales.router, prefix=settings.api_v1_prefix)
 app.include_router(recommendations.router, prefix=settings.api_v1_prefix)
 app.include_router(feedback.router, prefix=settings.api_v1_prefix)
 app.include_router(events.router, prefix=settings.api_v1_prefix)
+app.include_router(vendors.router, prefix=settings.api_v1_prefix)
+app.include_router(venues.router, prefix=settings.api_v1_prefix)
+app.include_router(audit.router, prefix=settings.api_v1_prefix)
+app.include_router(webhooks.router, prefix=settings.api_v1_prefix)
 
 # Monitoring endpoints (no prefix - at root level for standard /health, /metrics paths)
 app.include_router(monitoring.router)
