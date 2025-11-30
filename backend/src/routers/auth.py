@@ -82,7 +82,6 @@ def register(
         business_name=registration.business_name,
         subscription_tier="mvp",  # Start with MVP tier (per subscription model constraints)
         subscription_status="trial",  # New accounts start in trial
-        is_active=True,
     )
 
     db.add(new_vendor)
