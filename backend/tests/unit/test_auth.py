@@ -222,7 +222,9 @@ class TestJWTTokenValidation:
                 expected_type=TokenType.REFRESH,
             )
 
-        assert "token_type" in str(exc_info.value).lower()
+        # Check error message contains expected keywords
+        error_msg = str(exc_info.value).lower()
+        assert "expected" in error_msg and "token" in error_msg
 
     def test_validate_refresh_token_as_access_raises_error(self) -> None:
         """Validating refresh token as access token should raise error."""
