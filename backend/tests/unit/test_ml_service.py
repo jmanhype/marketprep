@@ -486,3 +486,259 @@ class TestMLRecommendationService:
         )
 
         assert recommendation.recommended_quantity >= 1  # Minimum enforced
+
+    def test_generate_recommendation_scaler_not_fitted(self, ml_service, product_id):
+        """Test recommendation falls back when scaler not fitted."""
+        ml_service.model_trained = True
+        ml_service.scaler_fitted = False
+        ml_service._get_recent_sales_for_product = MagicMock(return_value=[{'quantity': 8}] * 3)
+
+        recommendation = ml_service.generate_recommendation(
+            product_id=product_id,
+            market_date=datetime(2025, 6, 15),
+        )
+
+        # Should use fallback
+        assert recommendation.confidence_score == Decimal("0.5")
+
+    def test_generate_recommendation_scaling_fails(self, ml_service, product_id):
+        """Test recommendation falls back when feature scaling fails."""
+        ml_service.model_trained = True
+        ml_service.scaler_fitted = True
+
+        mock_features = pd.DataFrame([{'day_of_week': 5}])
+        ml_service._extract_features = MagicMock(return_value=mock_features)
+        ml_service.scaler.transform = MagicMock(side_effect=ValueError("Scaling error"))
+        ml_service._get_recent_sales_for_product = MagicMock(return_value=[{'quantity': 10}])
+
+        recommendation = ml_service.generate_recommendation(
+            product_id=product_id,
+            market_date=datetime(2025, 6, 15),
+        )
+
+        # Should fall back to heuristics
+        assert recommendation.recommended_quantity >= 1
+        assert recommendation.confidence_score == Decimal("0.5")
+
+    def test_generate_recommendation_prediction_fails(self, ml_service, product_id):
+        """Test recommendation falls back when model prediction fails."""
+        ml_service.model_trained = True
+        ml_service.scaler_fitted = True
+
+        mock_features = pd.DataFrame([{'day_of_week': 5}])
+        ml_service._extract_features = MagicMock(return_value=mock_features)
+        ml_service.scaler.transform = MagicMock(return_value=np.array([[0.5]]))
+        ml_service.model.predict = MagicMock(side_effect=Exception("Prediction error"))
+        ml_service._get_recent_sales_for_product = MagicMock(return_value=[{'quantity': 7}] * 2)
+
+        recommendation = ml_service.generate_recommendation(
+            product_id=product_id,
+            market_date=datetime(2025, 6, 15),
+        )
+
+        # Should fall back to heuristics
+        assert recommendation.recommended_quantity >= 1
+        assert recommendation.confidence_score == Decimal("0.5")
+
+    def test_generate_recommendations_for_date_handles_individual_failures(self, ml_service, db_session):
+        """Test batch generation continues when individual recommendations fail."""
+        # Mock 3 products
+        product1 = MagicMock(id=uuid4(), price=Decimal("5.99"))
+        product2 = MagicMock(id=uuid4(), price=Decimal("7.99"))
+        product3 = MagicMock(id=uuid4(), price=Decimal("3.99"))
+
+        db_session.query.return_value.filter.return_value.limit.return_value.all.return_value = [
+            product1, product2, product3
+        ]
+
+        # Make second product fail
+        def mock_generate_rec(product_id, **kwargs):
+            if product_id == product2.id:
+                raise Exception("Generation failed")
+
+            rec = MagicMock()
+            rec.recommended_quantity = 10
+            return rec
+
+        ml_service.generate_recommendation = MagicMock(side_effect=mock_generate_rec)
+
+        recommendations = ml_service.generate_recommendations_for_date(
+            market_date=datetime(2025, 6, 15),
+            limit=10,
+        )
+
+        # Should have 2 recommendations (product2 failed)
+        assert len(recommendations) == 2
+
+    def test_fallback_sunny_weather_boost(self, ml_service, product_id):
+        """Test fallback applies sunny weather boost."""
+        mock_sales = [{'quantity': 10}] * 5
+        ml_service._get_recent_sales_for_product = MagicMock(return_value=mock_sales)
+
+        weather_data = {'condition': 'sunny'}
+
+        quantity = ml_service._generate_fallback_recommendation(
+            product_id=product_id,
+            market_date=datetime(2025, 6, 15),
+            weather_data=weather_data,
+        )
+
+        assert quantity == 11  # 10 * 1.1 (sunny boost)
+
+    def test_fallback_snow_weather_penalty(self, ml_service, product_id):
+        """Test fallback applies snow weather penalty."""
+        mock_sales = [{'quantity': 10}] * 5
+        ml_service._get_recent_sales_for_product = MagicMock(return_value=mock_sales)
+
+        weather_data = {'condition': 'snow'}
+
+        quantity = ml_service._generate_fallback_recommendation(
+            product_id=product_id,
+            market_date=datetime(2025, 6, 15),
+            weather_data=weather_data,
+        )
+
+        assert quantity == 8  # 10 * 0.8 (snow penalty)
+
+    def test_fallback_medium_event_multiplier(self, ml_service, product_id):
+        """Test fallback applies medium event multiplier."""
+        mock_sales = [{'quantity': 10}] * 5
+        ml_service._get_recent_sales_for_product = MagicMock(return_value=mock_sales)
+
+        event_data = {'expected_attendance': 600}
+
+        quantity = ml_service._generate_fallback_recommendation(
+            product_id=product_id,
+            market_date=datetime(2025, 6, 15),
+            event_data=event_data,
+        )
+
+        assert quantity == 13  # 10 * 1.3 (medium event)
+
+
+class TestVenueEmbedding:
+    """Test venue embedding generation."""
+
+    @pytest.fixture
+    def vendor_id(self):
+        return uuid4()
+
+    @pytest.fixture
+    def venue_id(self):
+        return uuid4()
+
+    @pytest.fixture
+    def db_session(self):
+        return MagicMock()
+
+    @pytest.fixture
+    def engineer(self, vendor_id, db_session):
+        return VenueFeatureEngineer(vendor_id=vendor_id, db=db_session)
+
+    def test_generate_venue_embedding_no_venue(self, engineer, venue_id):
+        """Test embedding for non-existent venue."""
+        engineer.db.query.return_value.filter.return_value.first.return_value = None
+
+        embedding = engineer.generate_venue_embedding(venue_id)
+
+        assert embedding == [0.0] * 5
+        assert len(embedding) == 5
+
+    def test_generate_venue_embedding_with_location(self, engineer, venue_id):
+        """Test embedding for venue with location data."""
+        mock_venue = MagicMock()
+        mock_venue.typical_attendance = 500
+        mock_venue.latitude = Decimal("40.7128")
+        mock_venue.longitude = Decimal("-74.0060")
+
+        engineer.db.query.return_value.filter.return_value.first.return_value = mock_venue
+        engineer._get_venue_total_sales = MagicMock(return_value=250.0)
+        engineer._get_venue_first_sale_date = MagicMock(return_value=datetime(2024, 1, 1))
+
+        embedding = engineer.generate_venue_embedding(venue_id)
+
+        assert len(embedding) == 5
+        # Check attendance feature (500/1000 = 0.5)
+        assert embedding[0] == pytest.approx(0.5, rel=0.01)
+        # Latitude normalized (40.7128 / 90.0 ≈ 0.452)
+        assert embedding[1] == pytest.approx(40.7128 / 90.0, rel=0.01)
+        # Longitude normalized (-74.0060 / 180.0 ≈ -0.411)
+        # Note: This can be negative since longitude ranges from -180 to 180
+        assert embedding[2] == pytest.approx(-74.0060 / 180.0, rel=0.01)
+
+    def test_generate_venue_embedding_no_location(self, engineer, venue_id):
+        """Test embedding for venue without location data."""
+        mock_venue = MagicMock()
+        mock_venue.typical_attendance = 200
+        mock_venue.latitude = None
+        mock_venue.longitude = None
+
+        engineer.db.query.return_value.filter.return_value.first.return_value = mock_venue
+        engineer._get_venue_total_sales = MagicMock(return_value=100.0)
+        engineer._get_venue_first_sale_date = MagicMock(return_value=None)
+
+        embedding = engineer.generate_venue_embedding(venue_id)
+
+        assert len(embedding) == 5
+        # Should use default 0.5 for missing location
+        assert embedding[1] == 0.5
+        assert embedding[2] == 0.5
+        # Should use 0.0 for missing first sale date
+        assert embedding[4] == 0.0
+
+
+class TestVenueConfidenceInterpolation:
+    """Test venue confidence calculation edge cases."""
+
+    @pytest.fixture
+    def vendor_id(self):
+        return uuid4()
+
+    @pytest.fixture
+    def venue_id(self):
+        return uuid4()
+
+    @pytest.fixture
+    def product_id(self):
+        return uuid4()
+
+    @pytest.fixture
+    def engineer(self, vendor_id):
+        return VenueFeatureEngineer(vendor_id=vendor_id, db=MagicMock())
+
+    def test_calculate_venue_confidence_interpolation(self, engineer, venue_id, product_id):
+        """Test confidence interpolation between MIN and HIGH thresholds."""
+        # Create 10 sales (between MIN_VENUE_SALES=3 and HIGH_CONFIDENCE_SALES=20)
+        recent_sales = [
+            {'date': datetime(2025, 5, i), 'quantity': 10}
+            for i in range(1, 11)
+        ]
+        engineer._get_venue_product_sales = MagicMock(return_value=recent_sales)
+
+        confidence = engineer.calculate_venue_confidence(
+            venue_id=venue_id,
+            product_id=product_id,
+            market_date=datetime(2025, 6, 15),
+        )
+
+        # Should be between 0.6 and 0.85 (interpolated)
+        # With 10 sales: progress = (10-3)/(20-3) = 7/17 ≈ 0.41
+        # confidence = 0.6 + (0.25 * 0.41) ≈ 0.70
+        assert 0.6 < confidence < 0.85
+
+    def test_calculate_venue_confidence_low(self, engineer, venue_id, product_id):
+        """Test confidence for venue with insufficient sales."""
+        # Only 2 sales (< MIN_VENUE_SALES=3)
+        recent_sales = [
+            {'date': datetime(2025, 5, 1), 'quantity': 10},
+            {'date': datetime(2025, 5, 2), 'quantity': 12},
+        ]
+        engineer._get_venue_product_sales = MagicMock(return_value=recent_sales)
+
+        confidence = engineer.calculate_venue_confidence(
+            venue_id=venue_id,
+            product_id=product_id,
+            market_date=datetime(2025, 6, 15),
+        )
+
+        assert confidence == 0.4  # Low confidence
