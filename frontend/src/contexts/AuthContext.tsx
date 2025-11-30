@@ -57,6 +57,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, businessName: string) => Promise<void>;
+  updateVendorProfile: (vendor: Vendor) => void;
   logout: () => void;
 }
 
@@ -177,6 +178,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   /**
+   * Update vendor profile in context.
+   */
+  const updateVendorProfile = (updatedVendor: Vendor): void => {
+    setVendor(updatedVendor);
+  };
+
+  /**
    * Logout user.
    */
   const logout = (): void => {
@@ -197,6 +205,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isLoading,
     login,
     register,
+    updateVendorProfile,
     logout,
   };
 
