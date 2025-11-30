@@ -12,6 +12,7 @@ Tests Redis-backed rate limiting with sliding window:
 import logging
 import pytest
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, AsyncMock
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -74,8 +75,7 @@ class TestRateLimitMiddlewareBasic:
         request.headers = {}
         request.client = MagicMock()
         request.client.host = "192.168.1.100"
-        request.state = MagicMock()
-        # No vendor_id means anonymous
+        request.state = SimpleNamespace()  # No vendor_id means anonymous
         return request
 
     @pytest.fixture
@@ -87,8 +87,7 @@ class TestRateLimitMiddlewareBasic:
         request.headers = {}
         request.client = MagicMock()
         request.client.host = "192.168.1.100"
-        request.state = MagicMock()
-        request.state.vendor_id = "vendor-123"
+        request.state = SimpleNamespace(vendor_id="vendor-123")
         return request
 
     @pytest.mark.asyncio
@@ -256,8 +255,7 @@ class TestAnonymousVsAuthenticated:
         request.headers = {}
         request.client = MagicMock()
         request.client.host = "192.168.1.100"
-        request.state = MagicMock()
-        # No vendor_id
+        request.state = SimpleNamespace()  # No vendor_id
 
         expected_response = JSONResponse(content={"success": True}, status_code=200)
         call_next = AsyncMock(return_value=expected_response)
@@ -277,8 +275,7 @@ class TestAnonymousVsAuthenticated:
         request.headers = {}
         request.client = MagicMock()
         request.client.host = "192.168.1.100"
-        request.state = MagicMock()
-        request.state.vendor_id = "vendor-123"
+        request.state = SimpleNamespace(vendor_id="vendor-123")
 
         expected_response = JSONResponse(content={"success": True}, status_code=200)
         call_next = AsyncMock(return_value=expected_response)
@@ -317,7 +314,7 @@ class TestClientIPExtraction:
         request.headers = {"X-Forwarded-For": "203.0.113.1, 198.51.100.1"}
         request.client = MagicMock()
         request.client.host = "192.168.1.1"
-        request.state = MagicMock()
+        request.state = SimpleNamespace()
 
         identifier, limit = middleware._get_identifier_and_limit(request)
 
@@ -333,7 +330,7 @@ class TestClientIPExtraction:
         request.headers = {}
         request.client = MagicMock()
         request.client.host = "192.168.1.50"
-        request.state = MagicMock()
+        request.state = SimpleNamespace()
 
         identifier, limit = middleware._get_identifier_and_limit(request)
 
@@ -363,7 +360,7 @@ class TestGracefulDegradation:
             request.headers = {}
             request.client = MagicMock()
             request.client.host = "192.168.1.100"
-            request.state = MagicMock()
+            request.state = SimpleNamespace()
 
             expected_response = JSONResponse(content={"success": True}, status_code=200)
             call_next = AsyncMock(return_value=expected_response)
@@ -395,7 +392,7 @@ class TestRateLimitConfig:
             request.url.path = "/api/expensive"
             request.client = MagicMock()
             request.client.host = "192.168.1.100"
-            request.state = MagicMock()
+            request.state = SimpleNamespace()
 
             # Should not raise exception
             await config(request)
@@ -416,7 +413,7 @@ class TestRateLimitConfig:
             request.url.path = "/api/expensive"
             request.client = MagicMock()
             request.client.host = "192.168.1.100"
-            request.state = MagicMock()
+            request.state = SimpleNamespace()
 
             with pytest.raises(HTTPException) as exc_info:
                 await config(request)
@@ -435,7 +432,7 @@ class TestRateLimitConfig:
             request.url.path = "/api/expensive"
             request.client = MagicMock()
             request.client.host = "192.168.1.100"
-            request.state = MagicMock()
+            request.state = SimpleNamespace()
 
             with caplog.at_level(logging.WARNING):
                 # Should not raise exception (fail-open)
