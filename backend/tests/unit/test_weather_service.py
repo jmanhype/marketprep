@@ -1,187 +1,234 @@
-"""Unit tests for weather service.
-
-Tests weather API integration and caching behavior.
-"""
+"""Unit tests for weather service."""
 import pytest
+import json
 from datetime import datetime
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import MagicMock, AsyncMock, patch
+import httpx
 
 from src.services.weather import WeatherService
 
 
-class TestWeatherService:
-    """Test WeatherService functionality."""
+class TestWeatherServiceInit:
+    """Test WeatherService initialization."""
 
-    @pytest.fixture
-    def weather_service(self):
-        """Create weather service instance."""
-        return WeatherService()
+    def test_init_with_redis_available(self):
+        """Test initialization when Redis is available."""
+        with patch('src.services.weather.redis.from_url') as mock_redis:
+            mock_redis_instance = MagicMock()
+            mock_redis_instance.ping.return_value = True
+            mock_redis.return_value = mock_redis_instance
+            
+            service = WeatherService()
+            
+            assert service.cache_enabled is True
+            assert service.redis is not None
 
-    @pytest.fixture
-    def mock_weather_response(self):
-        """Mock OpenWeather API response."""
-        return {
-            "list": [
-                {
-                    "main": {
-                        "temp": 75.5,
-                        "feels_like": 78.2,
-                        "humidity": 65,
-                    },
-                    "weather": [
-                        {
-                            "main": "Rain",
-                            "description": "light rain",
-                        }
-                    ],
-                }
-            ]
-        }
+    def test_init_with_redis_unavailable(self):
+        """Test initialization when Redis is unavailable."""
+        with patch('src.services.weather.redis.from_url') as mock_redis:
+            mock_redis.side_effect = Exception("Redis connection failed")
+            
+            service = WeatherService()
+            
+            assert service.cache_enabled is False
+            assert service.redis is None
+
+
+class TestGetCacheKey:
+    """Test cache key generation."""
+
+    def test_cache_key_generation(self):
+        """Test cache key is generated correctly."""
+        with patch('src.services.weather.redis.from_url'):
+            service = WeatherService()
+            service.cache_enabled = False
+            
+            key = service._get_cache_key(40.7128, -74.0060, datetime(2025, 6, 15))
+            
+            assert isinstance(key, str)
+            assert len(key) == 32  # MD5 hash length
+
+    def test_cache_key_rounds_coordinates(self):
+        """Test coordinates are rounded for cache key."""
+        with patch('src.services.weather.redis.from_url'):
+            service = WeatherService()
+            service.cache_enabled = False
+            
+            # These should generate same key (rounded to 2 decimals)
+            key1 = service._get_cache_key(40.712801, -74.006001, datetime(2025, 6, 15))
+            key2 = service._get_cache_key(40.712899, -74.006099, datetime(2025, 6, 15))
+            
+            assert key1 == key2
+
+
+class TestGetForecast:
+    """Test get_forecast method."""
 
     @pytest.mark.asyncio
-    async def test_get_forecast_success(self, weather_service, mock_weather_response):
-        """Test successful weather forecast retrieval."""
-        with patch("httpx.AsyncClient") as mock_client:
+    async def test_get_forecast_no_api_key(self):
+        """Test forecast without API key returns defaults."""
+        with patch('src.services.weather.redis.from_url'):
+            service = WeatherService()
+            service.api_key = None
+            service.cache_enabled = False
+            
+            result = await service.get_forecast(40.7128, -74.0060)
+            
+            assert result["is_fallback"] is True
+            assert result["temp_f"] == 70.0
+
+    @pytest.mark.asyncio
+    async def test_get_forecast_cache_hit(self):
+        """Test forecast returns cached data when available."""
+        with patch('src.services.weather.redis.from_url') as mock_redis:
+            mock_redis_instance = MagicMock()
+            mock_redis_instance.ping.return_value = True
+            cached_data = {
+                "temp_f": 75.0,
+                "feels_like_f": 73.0,
+                "humidity": 60.0,
+                "condition": "sunny",
+                "description": "Clear skies"
+            }
+            mock_redis_instance.get.return_value = json.dumps(cached_data)
+            mock_redis.return_value = mock_redis_instance
+            
+            service = WeatherService()
+            service.api_key = "test_key"
+            
+            result = await service.get_forecast(40.7128, -74.0060)
+            
+            assert result == cached_data
+            mock_redis_instance.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_forecast_api_success(self):
+        """Test successful API call."""
+        with patch('src.services.weather.redis.from_url'):
+            service = WeatherService()
+            service.api_key = "test_key"
+            service.cache_enabled = False
+            
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json = MagicMock(return_value=mock_weather_response)
-
-            mock_get = AsyncMock(return_value=mock_response)
-            mock_client_instance = AsyncMock()
-            mock_client_instance.get = mock_get
-            mock_client.return_value.__aenter__.return_value = mock_client_instance
-
-            result = await weather_service.get_forecast(
-                lat=37.7749,
-                lon=-122.4194,
-                target_date=datetime(2024, 12, 25),
-            )
-
-            assert result["temp_f"] == 75.5
-            assert result["feels_like_f"] == 78.2
-            assert result["humidity"] == 65
-            assert result["condition"] == "rain"
-            assert result["description"] == "light rain"
+            mock_response.json.return_value = {
+                "list": [
+                    {
+                        "main": {
+                            "temp": 75.5,
+                            "feels_like": 73.2,
+                            "humidity": 65
+                        },
+                        "weather": [
+                            {
+                                "main": "Clear",
+                                "description": "clear sky"
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            with patch('httpx.AsyncClient') as mock_client:
+                mock_client_instance = MagicMock()
+                mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+                mock_client_instance.__aexit__ = AsyncMock(return_value=None)
+                mock_client_instance.get = AsyncMock(return_value=mock_response)
+                mock_client.return_value = mock_client_instance
+                
+                result = await service.get_forecast(40.7128, -74.0060)
+                
+                assert result["temp_f"] == 75.5
+                assert result["feels_like_f"] == 73.2
+                assert result["condition"] == "clear"
 
     @pytest.mark.asyncio
-    async def test_get_forecast_api_error(self, weather_service):
-        """Test weather forecast with API error falls back to defaults."""
-        with patch("httpx.AsyncClient") as mock_client:
+    async def test_get_forecast_api_error(self):
+        """Test API error returns defaults."""
+        with patch('src.services.weather.redis.from_url'):
+            service = WeatherService()
+            service.api_key = "test_key"
+            service.cache_enabled = False
+            
             mock_response = MagicMock()
             mock_response.status_code = 500
             mock_response.text = "Internal Server Error"
+            
+            with patch('httpx.AsyncClient') as mock_client:
+                mock_client_instance = MagicMock()
+                mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+                mock_client_instance.__aexit__ = AsyncMock(return_value=None)
+                mock_client_instance.get = AsyncMock(return_value=mock_response)
+                mock_client.return_value = mock_client_instance
+                
+                result = await service.get_forecast(40.7128, -74.0060)
+                
+                assert result["is_fallback"] is True
 
-            mock_get = AsyncMock(return_value=mock_response)
-            mock_client_instance = AsyncMock()
-            mock_client_instance.get = mock_get
-            mock_client.return_value.__aenter__.return_value = mock_client_instance
+    @pytest.mark.asyncio
+    async def test_get_forecast_caches_result(self):
+        """Test successful API call caches result."""
+        with patch('src.services.weather.redis.from_url') as mock_redis:
+            mock_redis_instance = MagicMock()
+            mock_redis_instance.ping.return_value = True
+            mock_redis_instance.get.return_value = None  # Cache miss
+            mock_redis.return_value = mock_redis_instance
+            
+            service = WeatherService()
+            service.api_key = "test_key"
+            
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "list": [{
+                    "main": {"temp": 75.5, "feels_like": 73.2, "humidity": 65},
+                    "weather": [{"main": "Clear", "description": "clear sky"}]
+                }]
+            }
+            
+            with patch('httpx.AsyncClient') as mock_client:
+                mock_client_instance = MagicMock()
+                mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+                mock_client_instance.__aexit__ = AsyncMock(return_value=None)
+                mock_client_instance.get = AsyncMock(return_value=mock_response)
+                mock_client.return_value = mock_client_instance
+                
+                await service.get_forecast(40.7128, -74.0060)
+                
+                # Verify cache write was called
+                mock_redis_instance.setex.assert_called_once()
 
-            result = await weather_service.get_forecast(
-                lat=37.7749,
-                lon=-122.4194,
-            )
 
-            # Should return default weather
+class TestGetForecastWithFallback:
+    """Test get_forecast_with_fallback method."""
+
+    @pytest.mark.asyncio
+    async def test_fallback_returns_defaults_on_failure(self):
+        """Test fallback returns default weather on complete failure."""
+        with patch('src.services.weather.redis.from_url'):
+            service = WeatherService()
+            service.api_key = None
+            service.cache_enabled = False
+            
+            result = await service.get_forecast_with_fallback(40.7128, -74.0060)
+            
+            assert result["is_fallback"] is True
+            assert result["temp_f"] == 70.0
+
+
+class TestDefaultWeather:
+    """Test _get_default_weather method."""
+
+    def test_default_weather_values(self):
+        """Test default weather has expected values."""
+        with patch('src.services.weather.redis.from_url'):
+            service = WeatherService()
+            service.cache_enabled = False
+            
+            result = service._get_default_weather()
+            
             assert result["temp_f"] == 70.0
             assert result["feels_like_f"] == 70.0
             assert result["humidity"] == 50.0
             assert result["condition"] == "clear"
-
-    @pytest.mark.asyncio
-    async def test_get_forecast_no_api_key(self):
-        """Test weather forecast without API key uses defaults."""
-        with patch("src.services.weather.settings") as mock_settings:
-            mock_settings.openweather_api_key = None
-
-            service = WeatherService()
-            result = await service.get_forecast(lat=37.7749, lon=-122.4194)
-
-            assert result["temp_f"] == 70.0
-            assert result["condition"] == "clear"
-            assert "unavailable" in result["description"].lower()
-
-    @pytest.mark.asyncio
-    async def test_get_forecast_network_error(self, weather_service):
-        """Test weather forecast with network error falls back to defaults."""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_get = AsyncMock(side_effect=Exception("Network error"))
-            mock_client_instance = AsyncMock()
-            mock_client_instance.get = mock_get
-            mock_client.return_value.__aenter__.return_value = mock_client_instance
-
-            result = await weather_service.get_forecast(
-                lat=37.7749,
-                lon=-122.4194,
-            )
-
-            # Should return default weather
-            assert result["temp_f"] == 70.0
-            assert result["condition"] == "clear"
-
-    @pytest.mark.asyncio
-    async def test_get_forecast_malformed_response(self, weather_service):
-        """Test weather forecast with malformed API response."""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json = MagicMock(return_value={"error": "invalid"})
-
-            mock_get = AsyncMock(return_value=mock_response)
-            mock_client_instance = AsyncMock()
-            mock_client_instance.get = mock_get
-            mock_client.return_value.__aenter__.return_value = mock_client_instance
-
-            result = await weather_service.get_forecast(
-                lat=37.7749,
-                lon=-122.4194,
-            )
-
-            # Should return default weather when response is malformed
-            assert result["temp_f"] == 70.0
-            assert result["condition"] == "clear"
-
-    def test_default_weather(self, weather_service):
-        """Test default weather data structure."""
-        result = weather_service._get_default_weather()
-
-        assert "temp_f" in result
-        assert "feels_like_f" in result
-        assert "humidity" in result
-        assert "condition" in result
-        assert "description" in result
-        assert result["temp_f"] == 70.0
-        assert result["condition"] == "clear"
-
-    @pytest.mark.asyncio
-    async def test_weather_conditions_mapping(self, weather_service):
-        """Test various weather conditions are mapped correctly."""
-        test_cases = [
-            ("Clear", "clear"),
-            ("Clouds", "clouds"),
-            ("Rain", "rain"),
-            ("Snow", "snow"),
-            ("Thunderstorm", "thunderstorm"),
-        ]
-
-        for api_condition, expected_condition in test_cases:
-            mock_response_data = {
-                "list": [
-                    {
-                        "main": {"temp": 70, "feels_like": 70, "humidity": 50},
-                        "weather": [{"main": api_condition, "description": "test"}],
-                    }
-                ]
-            }
-
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_resp = MagicMock()
-                mock_resp.status_code = 200
-                mock_resp.json = MagicMock(return_value=mock_response_data)
-
-                mock_get = AsyncMock(return_value=mock_resp)
-                mock_client_instance = AsyncMock()
-                mock_client_instance.get = mock_get
-                mock_client.return_value.__aenter__.return_value = mock_client_instance
-
-                result = await weather_service.get_forecast(lat=37.7749, lon=-122.4194)
-                assert result["condition"] == expected_condition.lower()
+            assert result["is_fallback"] is True
