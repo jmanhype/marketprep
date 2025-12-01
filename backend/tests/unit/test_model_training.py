@@ -219,6 +219,33 @@ class TestModelRetraining:
         # Should return None
         assert result is None
 
+    def test_retrain_with_feedback_all_invalid_data(self, trainer, mock_db):
+        """Test retraining with all invalid feedback data (covers lines 186-187)"""
+        vendor_id = "vendor-invalid"
+
+        # Mock feedback records with all invalid actual_quantity_sold
+        mock_feedback = []
+        for i in range(15):  # Sufficient count
+            feedback = MagicMock()
+            feedback.actual_quantity_sold = 0  # Invalid - will be filtered out
+            feedback.rating = 4
+            recommendation = MagicMock()
+            recommendation.market_date = datetime(2025, 1, 1)
+            recommendation.recommended_quantity = 10
+            feedback.recommendation = recommendation
+            mock_feedback.append(feedback)
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.join.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = mock_feedback
+
+        result = trainer.retrain_with_feedback(vendor_id, min_feedback_records=10)
+
+        # Should return None because no valid training data after filtering
+        assert result is None
+
     def test_retrain_keeps_better_existing_model(self, trainer, mock_db, temp_model_dir):
         """Test that retraining keeps existing model if it's better"""
         vendor_id = "vendor-789"
@@ -337,6 +364,33 @@ class TestDataPreparation:
         assert len(y) == 5
         assert "recommended_qty" in feature_names
         assert "rating" in feature_names
+
+    def test_prepare_feedback_training_data_filters_invalid(self, trainer):
+        """Test that invalid feedback records are filtered out (covers line 302)"""
+        # Mix of valid and invalid feedback
+        mock_feedback = []
+        for i in range(5):
+            feedback = MagicMock()
+            # First two have invalid actual_quantity_sold (0 and negative)
+            if i == 0:
+                feedback.actual_quantity_sold = 0  # Invalid
+            elif i == 1:
+                feedback.actual_quantity_sold = -5  # Invalid
+            else:
+                feedback.actual_quantity_sold = 10  # Valid
+
+            feedback.rating = 4
+            recommendation = MagicMock()
+            recommendation.market_date = datetime(2025, 1, 1)
+            recommendation.recommended_quantity = 10
+            feedback.recommendation = recommendation
+            mock_feedback.append(feedback)
+
+        X, y, feature_names = trainer._prepare_feedback_training_data(mock_feedback)
+
+        # Should only have 3 valid samples (excludes 0 and negative quantities)
+        assert X.shape[0] == 3
+        assert len(y) == 3
 
 
 class TestMetricsCalculation:
@@ -461,6 +515,30 @@ class TestModelPersistence:
         loaded_metadata = trainer._load_model_metadata(vendor_id)
 
         assert loaded_metadata == metadata
+
+    def test_load_model_metadata_no_models(self, trainer):
+        """Test loading metadata when no models exist (covers line 389)"""
+        vendor_id = "vendor-no-models"
+
+        # Attempt to load metadata for non-existent vendor
+        metadata = trainer._load_model_metadata(vendor_id)
+
+        # Should return empty dict
+        assert metadata == {}
+
+    def test_load_model_metadata_no_metadata_file(self, trainer, temp_model_dir):
+        """Test loading metadata when model exists but metadata file doesn't (covers line 393)"""
+        vendor_id = "vendor-no-metadata"
+
+        # Create model file WITHOUT metadata file
+        model_path = temp_model_dir / f"{vendor_id}_base_20250101_000000.pkl"
+        model_path.touch()
+
+        # Attempt to load metadata
+        metadata = trainer._load_model_metadata(vendor_id)
+
+        # Should return empty dict
+        assert metadata == {}
 
 
 class TestScheduledRetraining:
