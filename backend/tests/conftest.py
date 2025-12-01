@@ -12,9 +12,21 @@ from src.config import Settings
 @pytest.fixture(scope="session")
 def test_settings() -> Settings:
     """Override settings for testing."""
+    import os
+
+    # Use environment variables if available (for CI), otherwise use local defaults
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "postgresql://marketprep:devpassword@localhost:5433/marketprep_test"
+    )
+    redis_url = os.getenv(
+        "REDIS_URL",
+        "redis://localhost:6379/15"
+    )
+
     return Settings(
-        database_url="postgresql://marketprep:devpassword@localhost:5433/marketprep_test",
-        redis_url="redis://localhost:6379/15",  # Separate Redis DB for tests
+        database_url=database_url,
+        redis_url=redis_url,
         environment="development",  # Must be development|staging|production
         debug=True,
     )

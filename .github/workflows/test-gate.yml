@@ -54,9 +54,43 @@ jobs:
   #############################################
   test-python:
     runs-on: ubuntu-latest
+
+    # Add database services
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: marketprep_test
+          POSTGRES_USER: marketprep
+          POSTGRES_PASSWORD: devpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: backend
+
+    env:
+      DATABASE_URL: postgresql://marketprep:devpassword@localhost:5432/marketprep_test
+      REDIS_URL: redis://localhost:6379/15
+      ENVIRONMENT: development
+      DEBUG: true
+
     steps:
       - uses: actions/checkout@v4
 
@@ -75,6 +109,12 @@ jobs:
 
       - name: Run unit tests
         run: python -m pytest tests/unit/ -v --tb=short --no-cov
+
+      - name: Run smoke tests
+        run: python -m pytest tests/smoke/ -v -m smoke --tb=short --no-cov
+
+      - name: Run integration tests
+        run: python -m pytest tests/integration/ -v -m integration --tb=short --no-cov
 
       - name: Run all tests with coverage
         run: |
