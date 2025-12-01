@@ -14,7 +14,6 @@ from uuid import UUID, uuid4
 from sqlalchemy import String, Integer, Numeric, Text, DateTime, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.database import Base
 from src.models.base import TenantModel
 
 

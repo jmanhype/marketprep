@@ -98,7 +98,7 @@ class AuditLog(TenantModel):
         Index('ix_audit_user_timestamp', 'user_id', 'timestamp'),
         Index('ix_audit_resource', 'resource_type', 'resource_id'),
         Index('ix_audit_timestamp_sensitive', 'timestamp', 'is_sensitive'),
-        TenantModel.__table_args__,
+
     )
 
     def __repr__(self) -> str:
@@ -151,5 +151,5 @@ class DataAccessLog(TenantModel):
         Index('ix_data_access_subject_time', 'data_subject_id', 'accessed_at'),
         Index('ix_data_access_accessor_time', 'accessor_id', 'accessed_at'),
         Index('ix_data_access_vendor_type', 'vendor_id', 'data_type'),
-        TenantModel.__table_args__,
+
     )

@@ -71,7 +71,6 @@ class UserConsent(TenantModel):
     __table_args__ = (
         Index('ix_consent_user_type', 'user_id', 'consent_type'),
         Index('ix_consent_vendor_given', 'vendor_id', 'consent_given'),
-        TenantModel.__table_args__,
     )
 
 
@@ -112,7 +111,7 @@ class DataSubjectRequest(TenantModel):
         Index('ix_dsar_vendor_status', 'vendor_id', 'status'),
         Index('ix_dsar_deadline', 'deadline'),
         Index('ix_dsar_user_type', 'user_id', 'request_type'),
-        TenantModel.__table_args__,
+
     )
 
 
@@ -142,7 +141,7 @@ class DataRetentionPolicy(TenantModel):
 
     __table_args__ = (
         Index('ix_retention_vendor_type', 'vendor_id', 'data_type'),
-        TenantModel.__table_args__,
+
     )
 
 
@@ -173,7 +172,7 @@ class LegalHold(TenantModel):
 
     __table_args__ = (
         Index('ix_legal_hold_vendor_active', 'vendor_id', 'is_active'),
-        TenantModel.__table_args__,
+
     )
 
 
@@ -206,5 +205,5 @@ class DataDeletionLog(TenantModel):
     __table_args__ = (
         Index('ix_deletion_vendor_type_date', 'vendor_id', 'data_type', 'deleted_at'),
         Index('ix_deletion_reason', 'deletion_reason'),
-        TenantModel.__table_args__,
+
     )
