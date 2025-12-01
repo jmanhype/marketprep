@@ -11,7 +11,7 @@ Tests accuracy monitoring:
 
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from sqlalchemy import func
 
 from src.services.prediction_accuracy_tracking import (
@@ -552,3 +552,79 @@ class TestMonitoringFunction:
         assert report["vendor_count"] == 2
         assert report["vendors_meeting_sc002"] == 2  # Both vendors at 80%
         assert report["vendors_failing_sc002"] == 0
+
+    @patch('src.services.prediction_accuracy_tracking.logger')
+    def test_monitor_prediction_accuracy_below_threshold(self, mock_logger):
+        """Test prediction accuracy monitoring when below SC-002 threshold
+
+        This test covers the warning path (line 455) when system accuracy
+        is below the 70% success criterion.
+        """
+        mock_db = MagicMock()
+
+        # Mock overall feedback (60% accurate - BELOW threshold)
+        mock_overall_feedback = []
+        for i in range(100):
+            feedback = MagicMock()
+            feedback.was_accurate = i < 60  # Only 60% accurate
+            feedback.was_overstocked = False
+            feedback.was_understocked = False
+            feedback.variance_percentage = 25.0
+            mock_overall_feedback.append(feedback)
+
+        # Mock vendor query to return 1 vendor
+        mock_vendors = [("vendor-1",)]
+
+        # Mock vendor-specific feedback (also below threshold)
+        mock_vendor_feedback = []
+        for i in range(15):
+            feedback = MagicMock()
+            feedback.was_accurate = i < 8  # 53.3% accurate
+            feedback.was_overstocked = False
+            feedback.was_understocked = False
+            feedback.variance_percentage = 28.0
+            mock_vendor_feedback.append(feedback)
+
+        # Mock queries
+        call_count = [0]
+
+        def mock_query_side_effect(*args):
+            result = MagicMock()
+            result.join.return_value = result
+            result.filter.return_value = result
+            result.distinct.return_value = result
+
+            call_count[0] += 1
+
+            # Overall accuracy queries
+            if call_count[0] == 1:
+                result.all.return_value = mock_overall_feedback
+            elif call_count[0] == 2:
+                result.scalar.return_value = 200
+            # Vendor list query
+            elif call_count[0] == 3:
+                result.all.return_value = mock_vendors
+            # Vendor 1 feedback
+            elif call_count[0] == 4:
+                result.all.return_value = mock_vendor_feedback
+            else:
+                result.scalar.return_value = 20
+
+            return result
+
+        mock_db.query.side_effect = mock_query_side_effect
+
+        report = monitor_prediction_accuracy(mock_db)
+
+        # Verify report shows failure
+        assert report["overall_accuracy"]["meets_sc002"] is False
+        assert report["overall_accuracy"]["accuracy_rate"] == 60.0
+
+        # Verify warning was logged for system-wide failure
+        mock_logger.warning.assert_any_call(
+            "⚠️ System accuracy below SC-002 threshold: 60.0% "
+            "(need ≥70.0%)"
+        )
+
+        # Verify vendor failure is tracked
+        assert report["vendors_failing_sc002"] == 1
