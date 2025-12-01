@@ -174,7 +174,26 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Raises:
             HTTPException: 401 if authentication fails
         """
-        # Authenticate request
+        # Paths that don't require authentication
+        public_paths = [
+            "/",
+            "/health",
+            "/metrics",
+            "/api/docs",
+            "/api/redoc",
+            "/openapi.json",
+            "/api/v1/auth/register",
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/api/v1/webhooks",  # Webhooks use their own auth
+        ]
+
+        # Skip authentication for public paths
+        if any(request.url.path.startswith(path) for path in public_paths):
+            response = await call_next(request)
+            return response
+
+        # Authenticate request for protected paths
         self.authenticate(request)
 
         # Continue to next middleware/handler

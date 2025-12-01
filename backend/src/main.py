@@ -17,6 +17,7 @@ from src.middleware.rate_limit import RateLimitMiddleware
 from src.middleware.security_headers import SecurityHeadersMiddleware
 from src.middleware.metrics_middleware import MetricsMiddleware
 from src.middleware.compression import CompressionMiddleware
+from src.middleware.auth import AuthMiddleware
 from src.monitoring.metrics import initialize_metrics
 from src.routers import auth
 
@@ -181,6 +182,9 @@ app.add_middleware(
 
 # 6. Rate limiting
 app.add_middleware(RateLimitMiddleware)
+
+# 7. Authentication (must be after rate limiting but before routers)
+app.add_middleware(AuthMiddleware)
 
 # Include routers
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
