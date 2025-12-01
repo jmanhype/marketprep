@@ -84,7 +84,7 @@ jobs:
           DATABASE_URL: postgresql://marketprep:devpassword@localhost:5432/marketprep_test
           REDIS_URL: redis://localhost:6379/15
           ENVIRONMENT: development
-        run: python -m pytest tests/smoke/ -v -m smoke --tb=short
+        run: python -m pytest tests/smoke/ -v -m smoke --tb=short --no-cov
 
       - name: Run integration tests
         working-directory: ./backend
@@ -92,7 +92,7 @@ jobs:
           DATABASE_URL: postgresql://marketprep:devpassword@localhost:5432/marketprep_test
           REDIS_URL: redis://localhost:6379/15
           ENVIRONMENT: development
-        run: python -m pytest tests/integration/ -v -m integration --tb=short || true
+        run: python -m pytest tests/integration/ -v -m integration --tb=short --no-cov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

@@ -18,7 +18,9 @@ from src.routers.products import (
     list_products,
     sync_products,
     get_product,
+    create_product,
     ProductResponse,
+    ProductCreate,
     SyncResponse,
 )
 from src.models.product import Product
@@ -449,5 +451,146 @@ class TestGetProduct:
 
         assert result.description is None
         assert result.category is None
+        assert result.square_item_id is None
+        assert result.square_synced_at is None
+
+
+class TestCreateProduct:
+    """Test create_product endpoint."""
+
+    @pytest.fixture
+    def mock_db(self):
+        """Mock database session."""
+        db = MagicMock(spec=Session)
+        # Mock the refresh method to update the product attributes
+        def refresh_side_effect(product):
+            # After refresh, ensure the product has all needed attributes
+            pass
+        db.refresh.side_effect = refresh_side_effect
+        return db
+
+    @pytest.fixture
+    def vendor_id(self):
+        """Test vendor ID."""
+        return uuid4()
+
+    def test_create_product_with_price(self, mock_db, vendor_id):
+        """Test creating product with price specified."""
+        product_data = ProductCreate(
+            name="New Product",
+            description="Test description",
+            price=19.99,
+            category="Electronics",
+            unit="each",
+            is_active=True,
+            is_seasonal=False,
+        )
+
+        result = create_product(
+            product_data=product_data,
+            vendor_id=vendor_id,
+            db=mock_db,
+        )
+
+        # Verify product was added to database
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.refresh.assert_called_once()
+
+        # Verify response
+        assert isinstance(result, ProductResponse)
+        assert result.name == "New Product"
+        assert result.price == 19.99
+
+    def test_create_product_with_typical_price(self, mock_db, vendor_id):
+        """Test creating product with typical_price instead of price."""
+        product_data = ProductCreate(
+            name="Another Product",
+            description="Test description",
+            typical_price=15.50,
+            category="Food",
+            is_active=True,
+            is_seasonal=True,
+        )
+
+        result = create_product(
+            product_data=product_data,
+            vendor_id=vendor_id,
+            db=mock_db,
+        )
+
+        # Verify database operations
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+
+        # Verify response uses typical_price as price
+        assert result.name == "Another Product"
+        assert result.price == 15.50
+
+    def test_create_product_with_no_price(self, mock_db, vendor_id):
+        """Test creating product with neither price nor typical_price."""
+        product_data = ProductCreate(
+            name="Free Product",
+            description="Test description",
+            category="Samples",
+            is_active=True,
+            is_seasonal=False,
+        )
+
+        result = create_product(
+            product_data=product_data,
+            vendor_id=vendor_id,
+            db=mock_db,
+        )
+
+        # Verify price defaults to 0
+        assert result.price == 0.0
+
+    def test_create_product_minimal_fields(self, mock_db, vendor_id):
+        """Test creating product with only required fields."""
+        product_data = ProductCreate(
+            name="Minimal Product",
+        )
+
+        result = create_product(
+            product_data=product_data,
+            vendor_id=vendor_id,
+            db=mock_db,
+        )
+
+        # Verify defaults are applied
+        assert result.name == "Minimal Product"
+        assert result.description is None
+        assert result.category is None
+        assert result.is_active is True
+        assert result.is_seasonal is False
+
+    def test_create_product_response_format(self, mock_db, vendor_id):
+        """Test create_product response matches ProductResponse schema."""
+        product_data = ProductCreate(
+            name="Response Test Product",
+            description="Testing response format",
+            price=25.00,
+            category="Test",
+            unit="box",
+            is_active=True,
+            is_seasonal=False,
+        )
+
+        result = create_product(
+            product_data=product_data,
+            vendor_id=vendor_id,
+            db=mock_db,
+        )
+
+        # Verify all response fields
+        assert isinstance(result, ProductResponse)
+        assert isinstance(result.id, UUID)
+        assert result.name == "Response Test Product"
+        assert result.description == "Testing response format"
+        assert result.price == 25.00
+        assert result.category == "Test"
+        assert result.is_active is True
+        assert result.is_seasonal is False
         assert result.square_item_id is None
         assert result.square_synced_at is None
