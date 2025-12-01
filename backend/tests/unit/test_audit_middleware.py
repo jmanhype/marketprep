@@ -116,6 +116,32 @@ class TestAuditTrailMiddleware:
         assert response is not None
         mock_logger.error.assert_called()
 
+    @pytest.mark.asyncio
+    @patch('src.middleware.audit.SessionLocal')
+    @patch('src.middleware.audit.AuditService')
+    @patch('src.middleware.audit.logger')
+    async def test_middleware_handles_audit_service_error(self, mock_logger, mock_audit_service, mock_session, middleware):
+        """Test middleware handles audit service errors in _log_request (covers lines 188-189)"""
+        # Make audit service log_action raise an exception
+        mock_audit_service.return_value.log_action.side_effect = Exception("Audit service error")
+
+        request = MagicMock(spec=Request)
+        request.url.path = "/api/products"
+        request.method = "POST"
+        request.state.vendor_id = "vendor123"
+        request.state.user_email = "vendor@example.com"
+        request.query_params = {}
+
+        call_next = AsyncMock(return_value=Response(status_code=201))
+
+        # Should not raise, but log error
+        response = await middleware.dispatch(request, call_next)
+
+        assert response is not None
+        assert response.status_code == 201
+        # Verify logger.error was called for the audit service failure
+        mock_logger.error.assert_called()
+
     def test_should_skip_audit_health_check(self, middleware):
         """Test _should_skip_audit returns True for health checks"""
         request = MagicMock(spec=Request)
@@ -273,6 +299,26 @@ class TestDetermineAction:
         action = middleware._determine_action(request)
 
         assert action == AuditAction.SEARCH  # List operations are logged as SEARCH
+
+    def test_determine_action_other_auth_operations(self, middleware):
+        """Test VIEW action for non-login/logout/register auth endpoints (covers line 214)"""
+        request = MagicMock(spec=Request)
+        request.method = "POST"
+        request.url.path = "/auth/token/refresh"
+
+        action = middleware._determine_action(request)
+
+        assert action == AuditAction.VIEW  # Other auth operations default to VIEW
+
+    def test_determine_action_unknown_method(self, middleware):
+        """Test VIEW action for unknown HTTP methods (covers line 235)"""
+        request = MagicMock(spec=Request)
+        request.method = "CONNECT"  # Unknown/unsupported HTTP method
+        request.url.path = "/api/products"
+
+        action = middleware._determine_action(request)
+
+        assert action == AuditAction.VIEW  # Safe default for unknown methods
 
 
 class TestExtractResourceInfo:
