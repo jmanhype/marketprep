@@ -210,14 +210,14 @@ class AuditTrailMiddleware(BaseHTTPMiddleware):
             if "logout" in path:
                 return AuditAction.LOGOUT
             if "register" in path:
-                return AuditAction.ACCOUNT_CREATED
-            return AuditAction.OTHER
+                return AuditAction.CREATE  # Account registration is a CREATE
+            return AuditAction.VIEW  # Other auth operations (token refresh, etc.)
 
         # GDPR actions
         if "data-export" in path:
-            return AuditAction.DATA_EXPORTED
+            return AuditAction.DATA_EXPORT_REQUESTED
         if "/vendors/me" in path and method == "DELETE":
-            return AuditAction.ACCOUNT_DELETED
+            return AuditAction.DATA_DELETION_REQUESTED
 
         # CRUD operations
         if method == "POST":
@@ -230,9 +230,9 @@ class AuditTrailMiddleware(BaseHTTPMiddleware):
             # Distinguish between list and view
             if resource_id := self._extract_resource_info(request)[1]:
                 return AuditAction.VIEW
-            return AuditAction.LIST
+            return AuditAction.SEARCH  # List/search operations
         else:
-            return AuditAction.OTHER
+            return AuditAction.VIEW  # Safe default for unknown methods
 
     def _extract_resource_info(self, request: Request) -> tuple[str | None, str | None]:
         """
@@ -249,7 +249,8 @@ class AuditTrailMiddleware(BaseHTTPMiddleware):
         # Skip "api" and version prefixes
         if path_parts and path_parts[0] == "api":
             path_parts = path_parts[1:]
-        if path_parts and path_parts[0].startswith("v"):
+        # Check for version prefix (v1, v2, etc.) - not "vendors" or other resources
+        if path_parts and len(path_parts[0]) <= 3 and path_parts[0].startswith("v") and path_parts[0][1:].isdigit():
             path_parts = path_parts[1:]
 
         # First part is usually resource type
