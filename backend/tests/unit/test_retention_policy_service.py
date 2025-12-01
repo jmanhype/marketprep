@@ -142,6 +142,27 @@ class TestPolicyManagement:
         with pytest.raises(ValueError, match="Policy not found"):
             service.update_policy("nonexistent", retention_days=100)
 
+    def test_update_policy_is_active(self, service, mock_db):
+        """Test updating policy is_active status (covers line 120)"""
+        # Mock existing policy
+        mock_policy = MagicMock(spec=DataRetentionPolicy)
+        mock_policy.is_active = True
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = mock_policy
+
+        # Update is_active to False
+        result = service.update_policy(
+            policy_id="policy-1",
+            is_active=False,
+        )
+
+        # Verify update
+        assert result.is_active is False
+        mock_db.commit.assert_called_once()
+
     def test_delete_policy(self, service, mock_db):
         """Test deactivating a policy (soft delete)"""
         # Mock policy
@@ -360,6 +381,42 @@ class TestPolicyEnforcement:
         assert result["recommendations"] == 2
         assert mock_db.delete.call_count == 2
 
+    def test_enforce_recommendations_policy_dry_run(self, service, mock_db):
+        """Test recommendations policy dry run (covers line 299)"""
+        mock_policy = MagicMock(spec=DataRetentionPolicy)
+        mock_policy.vendor_id = "vendor-123"
+        mock_policy.data_type = "recommendations"
+        mock_policy.retention_days = 180
+
+        # Mock old recommendations
+        mock_recs = [MagicMock(), MagicMock(), MagicMock()]
+
+        call_count = [0]
+
+        def mock_query_side_effect(model):
+            result = MagicMock()
+            result.filter.return_value = result
+
+            call_count[0] += 1
+
+            if call_count[0] == 1:
+                result.all.return_value = []  # No legal holds
+            elif call_count[0] == 2:
+                result.all.return_value = mock_recs
+
+            return result
+
+        mock_db.query.side_effect = mock_query_side_effect
+
+        # Enforce in dry run
+        result = service.enforce_policy(mock_policy, dry_run=True)
+
+        # Verify dry run result
+        assert result["recommendations"] == 3
+        assert result["dry_run"] is True
+        # Should not delete in dry run
+        mock_db.delete.assert_not_called()
+
     def test_enforce_audit_logs_policy(self, service, mock_db):
         """Test audit logs retention enforcement"""
         mock_policy = MagicMock(spec=DataRetentionPolicy)
@@ -393,6 +450,42 @@ class TestPolicyEnforcement:
         # Verify deletion
         assert result["audit_logs"] == 1
         mock_db.delete.assert_called_once()
+
+    def test_enforce_audit_logs_policy_dry_run(self, service, mock_db):
+        """Test audit logs policy dry run (covers line 336)"""
+        mock_policy = MagicMock(spec=DataRetentionPolicy)
+        mock_policy.vendor_id = "vendor-123"
+        mock_policy.data_type = "audit_logs"
+        mock_policy.retention_days = 90
+
+        # Mock old logs
+        mock_logs = [MagicMock(), MagicMock()]
+
+        call_count = [0]
+
+        def mock_query_side_effect(model):
+            result = MagicMock()
+            result.filter.return_value = result
+
+            call_count[0] += 1
+
+            if call_count[0] == 1:
+                result.all.return_value = []  # No legal holds
+            elif call_count[0] == 2:
+                result.all.return_value = mock_logs
+
+            return result
+
+        mock_db.query.side_effect = mock_query_side_effect
+
+        # Enforce in dry run
+        result = service.enforce_policy(mock_policy, dry_run=True)
+
+        # Verify dry run result
+        assert result["audit_logs"] == 2
+        assert result["dry_run"] is True
+        # Should not delete in dry run
+        mock_db.delete.assert_not_called()
 
     def test_enforce_unknown_data_type(self, service, mock_db):
         """Test enforcement with unknown data type"""
@@ -456,6 +549,53 @@ class TestEnforceAllPolicies:
             assert result["total_policies"] == 1
             assert result["dry_run"] is False
             assert len(result["policies"]) == 1
+
+    def test_enforce_all_policies_handles_exception(self, service, mock_db):
+        """Test enforce_all_policies handles exceptions gracefully (covers lines 219-221)"""
+        # Mock policies
+        mock_policy1 = MagicMock(spec=DataRetentionPolicy)
+        mock_policy1.id = "policy-1"
+        mock_policy1.vendor_id = "vendor-123"
+        mock_policy1.data_type = "sales"
+        mock_policy1.retention_days = 365
+
+        mock_policy2 = MagicMock(spec=DataRetentionPolicy)
+        mock_policy2.id = "policy-2"
+        mock_policy2.vendor_id = "vendor-123"
+        mock_policy2.data_type = "recommendations"
+        mock_policy2.retention_days = 180
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = [mock_policy1, mock_policy2]
+
+        # Mock enforce_policy to raise exception for first policy, succeed for second
+        call_count = [0]
+
+        def enforce_side_effect(policy, dry_run):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("Database connection error")
+            return {"recommendations": 3}
+
+        service.enforce_policy = MagicMock(side_effect=enforce_side_effect)
+
+        # Enforce all
+        result = service.enforce_all_policies(vendor_id="vendor-123", dry_run=False)
+
+        # Verify result
+        assert result["total_policies"] == 2
+        assert len(result["policies"]) == 2
+
+        # First policy should have error
+        assert "error" in result["policies"][0]
+        assert result["policies"][0]["policy_id"] == "policy-1"
+        assert "Database connection error" in result["policies"][0]["error"]
+
+        # Second policy should succeed
+        assert "counts" in result["policies"][1]
+        assert result["policies"][1]["policy_id"] == "policy-2"
 
 
 class TestHelperMethods:
