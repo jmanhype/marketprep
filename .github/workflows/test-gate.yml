@@ -26,6 +26,7 @@ on:
       - '**.rb'
       - '**.java'
       - '**.kt'
+      - '**/requirements.txt'
       - 'package.json'
       - 'pyproject.toml'
       - 'go.mod'
@@ -47,6 +48,7 @@ on:
       - '**.rb'
       - '**.java'
       - '**.kt'
+      - '**/requirements.txt'
 
 jobs:
   #############################################
