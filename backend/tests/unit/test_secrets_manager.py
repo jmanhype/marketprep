@@ -15,6 +15,7 @@ Tests cryptographic functionality:
 import pytest
 from datetime import datetime, timedelta
 from freezegun import freeze_time
+from unittest.mock import patch, MagicMock
 
 from src.security.secrets_manager import (
     SecretsManager,
@@ -100,6 +101,16 @@ class TestSecretsManagerEncryption:
         # But both decrypt to same plaintext
         assert manager.decrypt_string(encrypted1) == plaintext
         assert manager.decrypt_string(encrypted2) == plaintext
+
+    def test_encrypt_string_handles_encryption_failure(self, manager):
+        """Test encryption failure is logged and re-raised (covers lines 70-72)."""
+        plaintext = "test_data"
+
+        # Mock fernet.encrypt to raise an exception
+        with patch.object(manager.fernet, 'encrypt', side_effect=RuntimeError("Encryption hardware failure")):
+            # The exception handler should log the error and re-raise
+            with pytest.raises(RuntimeError, match="Encryption hardware failure"):
+                manager.encrypt_string(plaintext)
 
 
 class TestSecretsManagerPasswordHashing:
