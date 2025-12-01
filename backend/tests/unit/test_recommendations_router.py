@@ -384,6 +384,103 @@ class TestListRecommendations:
 
         assert results == []
 
+    def test_list_recommendations_missing_product(self, mock_db, vendor_id):
+        """Test listing when recommendation's product no longer exists.
+
+        This covers the defensive check (line 203) where a recommendation exists
+        but its associated product has been deleted. The recommendation should
+        be skipped silently.
+        """
+        rec = MagicMock(spec=Recommendation)
+        rec.id = uuid4()
+        rec.product_id = uuid4()
+        rec.market_date = date(2025, 6, 15)
+
+        mock_rec_query = MagicMock()
+        mock_rec_query.filter.return_value = mock_rec_query
+        mock_rec_query.order_by.return_value = mock_rec_query
+        mock_rec_query.limit.return_value = mock_rec_query
+        mock_rec_query.all.return_value = [rec]
+
+        # Product query returns None (product deleted)
+        mock_product_query = MagicMock()
+        mock_product_query.filter.return_value = mock_product_query
+        mock_product_query.first.return_value = None
+
+        def query_side_effect(model):
+            if model == Recommendation:
+                return mock_rec_query
+            elif model == Product:
+                return mock_product_query
+
+        mock_db.query.side_effect = query_side_effect
+
+        results = list_recommendations(
+            vendor_id=vendor_id,
+            db=mock_db,
+            market_date="2025-06-15",
+            days_ahead=7,
+            limit=20,
+        )
+
+        # Should return empty list (recommendation skipped)
+        assert results == []
+
+    def test_list_recommendations_low_confidence(self, mock_db, vendor_id):
+        """Test listing recommendations with low confidence score.
+
+        This covers line 235 where confidence_score < 0.5 results in
+        confidence_level = "low".
+        """
+        product = MagicMock(spec=Product)
+        product.id = uuid4()
+        product.name = "Cucumbers"
+        product.price = Decimal("3.00")
+        product.category = "Vegetables"
+
+        rec = MagicMock(spec=Recommendation)
+        rec.id = uuid4()
+        rec.product_id = product.id
+        rec.market_date = date(2025, 6, 15)
+        rec.recommended_quantity = 20
+        rec.confidence_score = Decimal("0.35")  # Low confidence (< 0.5)
+        rec.predicted_revenue = Decimal("60.00")
+        rec.weather_features = None
+        rec.event_features = None
+        rec.historical_features = None
+        rec.generated_at = datetime(2025, 1, 15, 12, 0, 0)
+        rec.venue_id = None
+
+        mock_rec_query = MagicMock()
+        mock_rec_query.filter.return_value = mock_rec_query
+        mock_rec_query.order_by.return_value = mock_rec_query
+        mock_rec_query.limit.return_value = mock_rec_query
+        mock_rec_query.all.return_value = [rec]
+
+        mock_product_query = MagicMock()
+        mock_product_query.filter.return_value = mock_product_query
+        mock_product_query.first.return_value = product
+
+        def query_side_effect(model):
+            if model == Recommendation:
+                return mock_rec_query
+            elif model == Product:
+                return mock_product_query
+
+        mock_db.query.side_effect = query_side_effect
+
+        results = list_recommendations(
+            vendor_id=vendor_id,
+            db=mock_db,
+            market_date="2025-06-15",
+            days_ahead=7,
+            limit=20,
+        )
+
+        assert len(results) == 1
+        assert results[0].confidence_score == 0.35
+        assert results[0].confidence_level == "low"
+
 
 class TestUpdateFeedback:
     """Test update_feedback endpoint."""
