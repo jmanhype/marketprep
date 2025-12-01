@@ -372,6 +372,32 @@ class TestSquareServiceDataImport:
             mock_sync_instance.sync_sales.assert_called_once_with(days_back=30)
 
     @pytest.mark.asyncio
+    async def test_import_sales_no_connection(self, square_service, vendor_id, db_session):
+        """Test sales import fails when not connected.
+
+        This covers line 259 where ValueError is raised if Square is not
+        connected or token is expired.
+        """
+        db_session.query.return_value.filter.return_value.first.return_value = None
+
+        with pytest.raises(ValueError, match="not connected"):
+            await square_service.import_sales(vendor_id)
+
+    @pytest.mark.asyncio
+    async def test_import_sales_expired_token(self, square_service, vendor_id, db_session):
+        """Test sales import fails with expired token.
+
+        This covers line 259 where ValueError is raised if token is expired.
+        """
+        expired_token = MagicMock(spec=SquareToken)
+        expired_token.expires_at = datetime.utcnow() - timedelta(days=1)
+
+        db_session.query.return_value.filter.return_value.first.return_value = expired_token
+
+        with pytest.raises(ValueError, match="expired"):
+            await square_service.import_sales(vendor_id)
+
+    @pytest.mark.asyncio
     async def test_full_import_success(self, square_service, vendor_id, db_session, valid_token):
         """Test successful full import (products + sales)."""
         db_session.query.return_value.filter.return_value.first.return_value = valid_token
@@ -391,6 +417,32 @@ class TestSquareServiceDataImport:
             assert result["products_created"] == 10
             assert result["sales_created"] == 25
             mock_sync_instance.full_sync.assert_called_once_with(days_back=30)
+
+    @pytest.mark.asyncio
+    async def test_full_import_no_connection(self, square_service, vendor_id, db_session):
+        """Test full import fails when not connected.
+
+        This covers line 289 where ValueError is raised if Square is not
+        connected or token is expired.
+        """
+        db_session.query.return_value.filter.return_value.first.return_value = None
+
+        with pytest.raises(ValueError, match="not connected"):
+            await square_service.full_import(vendor_id)
+
+    @pytest.mark.asyncio
+    async def test_full_import_expired_token(self, square_service, vendor_id, db_session):
+        """Test full import fails with expired token.
+
+        This covers line 289 where ValueError is raised if token is expired.
+        """
+        expired_token = MagicMock(spec=SquareToken)
+        expired_token.expires_at = datetime.utcnow() - timedelta(days=1)
+
+        db_session.query.return_value.filter.return_value.first.return_value = expired_token
+
+        with pytest.raises(ValueError, match="expired"):
+            await square_service.full_import(vendor_id)
 
 
 class TestSquareServiceSyncManagement:
