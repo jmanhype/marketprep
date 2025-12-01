@@ -104,6 +104,56 @@ class TestVerifyHashChain:
         assert result.broken_log_id == log2.id
         assert "INVALID" in result.message
 
+    def test_verify_first_log_with_previous_hash(self, mock_db, vendor_id):
+        """Test verification when first log has non-null previous_hash."""
+        # First log should have None or empty previous_hash
+        log1 = MagicMock(spec=AuditLog)
+        log1.id = uuid4()
+        log1.timestamp = datetime(2025, 1, 1, 10, 0, 0)
+        log1.previous_hash = "unexpected_hash"  # Invalid for first log
+        log1.hash_value = "hash1"
+
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = [log1]
+        mock_db.query.return_value = mock_query
+
+        result = verify_hash_chain(vendor_id=vendor_id, db=mock_db, days_back=90)
+
+        assert result.is_valid is False
+        assert result.broken_log_id == log1.id
+        assert "INVALID" in result.message
+        assert result.total_logs_checked == 1
+
+    def test_verify_invalid_hash_content(self, mock_db, vendor_id):
+        """Test verification when hash doesn't match content."""
+        log1 = MagicMock(spec=AuditLog)
+        log1.id = uuid4()
+        log1.timestamp = datetime(2025, 1, 1, 10, 0, 0)
+        log1.previous_hash = None
+        log1.hash_value = "hash1"
+        log1.verify_hash = MagicMock(return_value=True)
+
+        log2 = MagicMock(spec=AuditLog)
+        log2.id = uuid4()
+        log2.timestamp = datetime(2025, 1, 1, 11, 0, 0)
+        log2.previous_hash = "hash1"
+        log2.hash_value = "hash2"
+        log2.verify_hash = MagicMock(return_value=False)  # Hash verification fails!
+
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = [log1, log2]
+        mock_db.query.return_value = mock_query
+
+        result = verify_hash_chain(vendor_id=vendor_id, db=mock_db, days_back=90)
+
+        assert result.is_valid is False
+        assert result.broken_log_id == log2.id
+        assert "INVALID" in result.message
+
 
 class TestListAuditLogs:
     """Test list_audit_logs endpoint."""
@@ -156,6 +206,56 @@ class TestListAuditLogs:
         assert len(results) == 1
         assert isinstance(results[0], AuditLogResponse)
         assert results[0].action == "UPDATE"
+
+    def test_list_logs_with_action_filter(self, mock_db, vendor_id, sample_logs):
+        """Test listing audit logs filtered by action."""
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.offset.return_value = mock_query
+        mock_query.all.return_value = sample_logs
+        mock_db.query.return_value = mock_query
+
+        results = list_audit_logs(
+            vendor_id=vendor_id,
+            db=mock_db,
+            limit=100,
+            offset=0,
+            days_back=30,
+            action="UPDATE",
+            resource_type=None,
+        )
+
+        assert len(results) == 1
+        assert results[0].action == "UPDATE"
+        # Verify filter was called
+        assert mock_query.filter.call_count >= 2
+
+    def test_list_logs_with_resource_type_filter(self, mock_db, vendor_id, sample_logs):
+        """Test listing audit logs filtered by resource_type."""
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.offset.return_value = mock_query
+        mock_query.all.return_value = sample_logs
+        mock_db.query.return_value = mock_query
+
+        results = list_audit_logs(
+            vendor_id=vendor_id,
+            db=mock_db,
+            limit=100,
+            offset=0,
+            days_back=30,
+            action=None,
+            resource_type="Product",
+        )
+
+        assert len(results) == 1
+        assert results[0].resource_type == "Product"
+        # Verify filter was called
+        assert mock_query.filter.call_count >= 2
 
 
 class TestListDataAccessLogs:

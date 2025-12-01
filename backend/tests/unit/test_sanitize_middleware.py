@@ -455,6 +455,15 @@ class TestInputSanitizerURL:
         with pytest.raises(ValueError, match="Invalid URL"):
             InputSanitizer.validate_url(url)
 
+    @patch('urllib.parse.urlparse')
+    def test_validate_url_parse_exception(self, mock_urlparse):
+        """Test URL parsing exception is caught and raised as ValueError"""
+        mock_urlparse.side_effect = Exception("Parsing failed")
+        url = "http://example.com"
+
+        with pytest.raises(ValueError, match="Invalid URL: Parsing failed"):
+            InputSanitizer.validate_url(url)
+
 
 class TestSanitizationMiddleware:
     """Test sanitization middleware integration"""
@@ -632,6 +641,64 @@ class TestSanitizationMiddleware:
         response = await middleware.dispatch(request, call_next)
 
         # Should not attempt to parse body
+        call_next.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_middleware_query_param_sanitization_error_strict_mode(self, strict_middleware):
+        """Test query parameter sanitization error in strict mode"""
+        request = MagicMock(spec=Request)
+        request.url.path = "/api/search"
+        request.query_params = {"q": "test"}
+        request.method = "GET"
+        request.headers = {}
+        request.scope = {}
+        call_next = AsyncMock(return_value=Response())
+
+        # Mock sanitizer to raise exception
+        with patch.object(strict_middleware.sanitizer, 'sanitize_dict', side_effect=Exception("Sanitization error")):
+            with pytest.raises(HTTPException) as exc_info:
+                await strict_middleware.dispatch(request, call_next)
+
+            assert exc_info.value.status_code == 400
+            assert "Invalid query parameters" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_middleware_invalid_json_non_strict_mode(self, middleware):
+        """Test invalid JSON in non-strict mode continues to handler"""
+        request = MagicMock(spec=Request)
+        request.url.path = "/api/create"
+        request.query_params = {}
+        request.method = "POST"
+        request.headers = {"content-type": "application/json"}
+        request.scope = {}
+        request.body = AsyncMock(return_value=b"invalid json{")
+
+        call_next = AsyncMock(return_value=Response())
+
+        response = await middleware.dispatch(request, call_next)
+
+        # Should continue to next handler (FastAPI will handle the error)
+        call_next.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_middleware_sanitizes_json_primitive_value(self, middleware):
+        """Test JSON body with primitive value (not dict or list)"""
+        request = MagicMock(spec=Request)
+        request.url.path = "/api/create"
+        request.query_params = {}
+        request.method = "POST"
+        request.headers = {"content-type": "application/json"}
+        request.scope = {}
+
+        # JSON with primitive value (string)
+        body_data = "just a string"
+        request.body = AsyncMock(return_value=json.dumps(body_data).encode())
+
+        call_next = AsyncMock(return_value=Response())
+
+        response = await middleware.dispatch(request, call_next)
+
+        # Should process without error
         call_next.assert_called_once()
 
 
