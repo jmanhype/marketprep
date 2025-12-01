@@ -80,22 +80,26 @@ class AuthenticatedClient:
 
     def get(self, *args, **kwargs):
         """GET request with auth headers."""
-        kwargs.setdefault("headers", {}).update(self.headers)
+        headers = kwargs.setdefault("headers", {})
+        headers.update(self.headers)
         return self.client.get(*args, **kwargs)
 
     def post(self, *args, **kwargs):
         """POST request with auth headers."""
-        kwargs.setdefault("headers", {}).update(self.headers)
+        headers = kwargs.setdefault("headers", {})
+        headers.update(self.headers)
         return self.client.post(*args, **kwargs)
 
     def put(self, *args, **kwargs):
         """PUT request with auth headers."""
-        kwargs.setdefault("headers", {}).update(self.headers)
+        headers = kwargs.setdefault("headers", {})
+        headers.update(self.headers)
         return self.client.put(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         """DELETE request with auth headers."""
-        kwargs.setdefault("headers", {}).update(self.headers)
+        headers = kwargs.setdefault("headers", {})
+        headers.update(self.headers)
         return self.client.delete(*args, **kwargs)
 
 
