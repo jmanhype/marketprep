@@ -138,6 +138,22 @@ class TestCSRFProtection:
 
         assert is_valid is False
 
+    @patch('src.middleware.csrf.logger')
+    def test_validate_token_internal_exception(self, mock_logger, csrf):
+        """Test exception handler catches internal errors (covers lines 136-138)"""
+        # Create a valid-format token that will cause an exception during validation
+        # We'll mock int() to raise an exception when parsing timestamp
+        token = csrf.generate_token()
+
+        with patch('src.middleware.csrf.int', side_effect=ValueError("Invalid timestamp")):
+            is_valid = csrf.validate_token(token)
+
+            assert is_valid is False
+            # Verify logger.error was called with the exception
+            mock_logger.error.assert_called_once()
+            error_call = mock_logger.error.call_args[0][0]
+            assert "CSRF token validation error" in error_call
+
     def test_secret_key_bytes(self):
         """Test initialization with bytes secret key"""
         csrf = CSRFProtection(secret_key=b"bytes_secret_key", token_expiry=3600)
@@ -465,6 +481,23 @@ class TestOAuthStateProtection:
         is_valid = oauth.validate_state("totally_invalid", vendor_id="vendor123")
 
         assert is_valid is False
+
+    @patch('src.middleware.csrf.logger')
+    def test_validate_state_internal_exception(self, mock_logger, oauth):
+        """Test exception handler catches internal errors (covers lines 395-397)"""
+        # Create a valid-format state that will cause an exception during validation
+        vendor_id = "vendor123"
+        state = oauth.generate_state(vendor_id=vendor_id)
+
+        # Mock int() to raise an exception when parsing timestamp
+        with patch('src.middleware.csrf.int', side_effect=ValueError("Invalid timestamp")):
+            is_valid = oauth.validate_state(state, vendor_id=vendor_id)
+
+            assert is_valid is False
+            # Verify logger.error was called with the exception
+            mock_logger.error.assert_called_once()
+            error_call = mock_logger.error.call_args[0][0]
+            assert "OAuth state validation error" in error_call
 
     def test_secret_key_bytes(self):
         """Test initialization with bytes secret key"""
