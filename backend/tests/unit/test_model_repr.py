@@ -6,6 +6,7 @@ Tests __repr__ string representation for various models.
 
 from datetime import datetime
 from decimal import Decimal
+from uuid import uuid4
 
 from src.models.audit_log import AuditLog
 from src.models.product import Product
@@ -13,6 +14,41 @@ from src.models.sale import Sale
 from src.models.venue import Venue
 from src.models.square_token import SquareToken
 from src.models.event_data import EventData
+from src.models.base import BaseModel, TenantModel
+
+
+class TestBaseModelRepr:
+    """Test BaseModel and TenantModel __repr__ methods"""
+
+    def test_base_model_repr(self):
+        """Test BaseModel __repr__ method (covers line 65)"""
+        # Create a concrete class for testing
+        class TestModel(BaseModel):
+            __tablename__ = "test_model"
+
+        test_id = uuid4()
+        instance = TestModel(id=test_id)
+
+        result = repr(instance)
+
+        assert "TestModel" in result
+        assert str(test_id) in result
+
+    def test_tenant_model_repr(self):
+        """Test TenantModel __repr__ method (covers line 75)"""
+        # Create a concrete class for testing
+        class TestTenantModel(TenantModel):
+            __tablename__ = "test_tenant_model"
+
+        test_id = uuid4()
+        vendor_id = uuid4()
+        instance = TestTenantModel(id=test_id, vendor_id=vendor_id)
+
+        result = repr(instance)
+
+        assert "TestTenantModel" in result
+        assert str(test_id) in result
+        assert str(vendor_id) in result
 
 
 class TestModelRepr:
