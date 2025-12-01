@@ -481,14 +481,20 @@ class TestAuthMiddlewareIntegration:
     async def test_middleware_rejects_unauthenticated_request(self) -> None:
         """Middleware should reject request without valid token."""
         from unittest.mock import Mock
+        from starlette.responses import JSONResponse
 
         request = Mock(spec=Request)
+        request.url = Mock()
+        request.url.path = "/api/v1/products"  # Protected endpoint
         request.headers = Headers({})  # No Authorization header
         request.state = Mock()
 
         auth_middleware = AuthMiddleware()
 
+        async def mock_call_next(req):
+            return JSONResponse({"status": "ok"})
+
         with pytest.raises(HTTPException) as exc_info:
-            await auth_middleware.dispatch(request, lambda req: None)
+            await auth_middleware.dispatch(request, mock_call_next)
 
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
