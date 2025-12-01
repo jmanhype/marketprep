@@ -793,3 +793,233 @@ class TestHealthCheckerCheckAll:
         # Database check should show as unhealthy due to exception
         assert result["checks"]["database"]["status"] == "unhealthy"
         assert "error" in result["checks"]["database"]["details"]
+
+
+class TestHealthCheckerAdditionalCoverage:
+    """Additional tests to reach 100% coverage"""
+
+    @pytest.fixture
+    def checker(self):
+        """Create health checker"""
+        return HealthChecker()
+
+    @pytest.mark.asyncio
+    @patch('src.monitoring.health_checks.settings')
+    @patch('src.monitoring.health_checks.httpx.AsyncClient')
+    @patch('time.time')
+    async def test_square_api_degraded_slow_response(self, mock_time, mock_client_class, mock_settings, checker):
+        """Test degraded Square API when response is slow (> 2000ms)"""
+        mock_settings.square_application_id = "test_app_id"
+        mock_settings.square_application_secret = "test_secret"
+        mock_settings.square_base_url = "https://connect.squareup.com"
+
+        # Simulate 2.5 second response time
+        mock_time.side_effect = [0, 2.5]
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_client_class.return_value = mock_client
+
+        result = await checker.check_square_api()
+
+        assert result.name == "square"
+        assert result.status == HealthStatus.DEGRADED  # Slow response
+        assert result.latency_ms == 2500
+
+    @pytest.mark.asyncio
+    @patch('src.monitoring.health_checks.settings')
+    @patch('src.monitoring.health_checks.httpx.AsyncClient')
+    @patch('time.time')
+    async def test_weather_api_degraded_slow_response(self, mock_time, mock_client_class, mock_settings, checker):
+        """Test degraded Weather API when response is slow (> 3000ms)"""
+        mock_settings.openweather_api_key = "test_api_key"
+
+        # Simulate 3.5 second response time
+        mock_time.side_effect = [0, 3.5]
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_client_class.return_value = mock_client
+
+        result = await checker.check_weather_api()
+
+        assert result.name == "weather"
+        assert result.status == HealthStatus.DEGRADED  # Slow response
+        assert result.latency_ms == 3500
+
+    @pytest.mark.asyncio
+    @patch('src.monitoring.health_checks.settings')
+    @patch('src.monitoring.health_checks.httpx.AsyncClient')
+    async def test_weather_api_degraded_exception(self, mock_client_class, mock_settings, checker):
+        """Test degraded Weather API on exception"""
+        mock_settings.openweather_api_key = "test_api_key"
+
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = Exception("Timeout error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_client_class.return_value = mock_client
+
+        result = await checker.check_weather_api()
+
+        assert result.name == "weather"
+        assert result.status == HealthStatus.DEGRADED
+        assert "Timeout error" in result.details["error"]
+
+    @pytest.mark.asyncio
+    @patch('src.monitoring.health_checks.settings')
+    @patch('src.monitoring.health_checks.httpx.AsyncClient')
+    @patch('time.time')
+    async def test_events_api_degraded_slow_response(self, mock_time, mock_client_class, mock_settings, checker):
+        """Test degraded Events API when response is slow (> 3000ms)"""
+        mock_settings.eventbrite_api_key = "test_api_key"
+
+        # Simulate 3.2 second response time
+        mock_time.side_effect = [0, 3.2]
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_client_class.return_value = mock_client
+
+        result = await checker.check_events_api()
+
+        assert result.name == "events"
+        assert result.status == HealthStatus.DEGRADED  # Slow response
+        assert result.latency_ms == 3200
+
+    @pytest.mark.asyncio
+    @patch('src.monitoring.health_checks.settings')
+    @patch('src.monitoring.health_checks.httpx.AsyncClient')
+    async def test_events_api_degraded_http_error(self, mock_client_class, mock_settings, checker):
+        """Test degraded Events API on HTTP error"""
+        mock_settings.eventbrite_api_key = "test_api_key"
+
+        mock_response = AsyncMock()
+        mock_response.status_code = 403
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_client_class.return_value = mock_client
+
+        result = await checker.check_events_api()
+
+        assert result.name == "events"
+        assert result.status == HealthStatus.DEGRADED
+        assert "HTTP 403" in result.details["error"]
+
+    @pytest.mark.asyncio
+    @patch('src.monitoring.health_checks.settings')
+    @patch('src.monitoring.health_checks.httpx.AsyncClient')
+    async def test_events_api_degraded_exception(self, mock_client_class, mock_settings, checker):
+        """Test degraded Events API on exception"""
+        mock_settings.eventbrite_api_key = "test_api_key"
+
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = Exception("Connection error")
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_client_class.return_value = mock_client
+
+        result = await checker.check_events_api()
+
+        assert result.name == "events"
+        assert result.status == HealthStatus.DEGRADED
+        assert "Connection error" in result.details["error"]
+
+    @patch('os.path.exists')
+    def test_ml_model_degraded_exception(self, mock_exists, checker):
+        """Test degraded ML model check on exception"""
+        mock_exists.side_effect = Exception("File system error")
+
+        result = checker.check_ml_model()
+
+        assert result.name == "ml_model"
+        assert result.status == HealthStatus.DEGRADED
+        assert "File system error" in result.details["error"]
+        assert "fallback heuristics" in result.details["impact"]
+
+    @patch('psutil.virtual_memory')
+    def test_memory_unhealthy_exception(self, mock_memory, checker):
+        """Test unhealthy memory check on exception"""
+        mock_memory.side_effect = Exception("Memory read error")
+
+        result = checker.check_memory_usage()
+
+        assert result.name == "memory"
+        assert result.status == HealthStatus.UNHEALTHY
+        assert "Memory read error" in result.details["error"]
+
+    @pytest.mark.asyncio
+    @patch('src.monitoring.health_checks.settings')
+    @patch('shutil.disk_usage')
+    @patch('psutil.virtual_memory')
+    @patch('os.path.exists')
+    async def test_check_all_with_check_raising_exception(
+        self,
+        mock_exists,
+        mock_memory,
+        mock_disk,
+        mock_settings,
+    ):
+        """Test check_all handles exception from individual check"""
+        mock_settings.version = "1.0.0"
+        mock_settings.environment = "test"
+        mock_settings.square_application_id = None
+        mock_settings.openweather_api_key = None
+        mock_settings.eventbrite_api_key = None
+
+        # Mock system checks - ml_model will fail
+        mock_exists.side_effect = Exception("Unexpected error")
+
+        mock_mem = MagicMock()
+        mock_mem.total = 16 * (1024 ** 3)
+        mock_mem.available = 10 * (1024 ** 3)
+        mock_mem.percent = 37.5
+        mock_memory.return_value = mock_mem
+
+        mock_usage = MagicMock()
+        mock_usage.total = 1000 * (1024 ** 3)
+        mock_usage.used = 500 * (1024 ** 3)
+        mock_usage.free = 500 * (1024 ** 3)
+        mock_disk.return_value = mock_usage
+
+        mock_db = MagicMock()
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (1,)
+        mock_db.execute.return_value = mock_result
+
+        mock_redis = MagicMock()
+        mock_redis.ping.return_value = True
+
+        checker = HealthChecker(db_session=mock_db, redis_client=mock_redis)
+
+        result = await checker.check_all()
+
+        # Check should still complete
+        assert "checks" in result
+        # ML model check should show degraded due to exception caught in check_ml_model
+        assert "ml_model" in result["checks"]
+        assert result["checks"]["ml_model"]["status"] == "degraded"
