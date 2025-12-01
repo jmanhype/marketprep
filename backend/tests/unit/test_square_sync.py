@@ -306,6 +306,47 @@ class TestSyncProducts:
         assert result["created"] == 2
         assert mock_db.add.call_count == 2
 
+    @pytest.mark.asyncio
+    async def test_sync_products_catches_catalog_item_exception(self, service, mock_db):
+        """Test sync catches and logs exceptions during catalog item processing (covers lines 163-166)"""
+        catalog_response = {
+            "objects": [
+                {
+                    "type": "ITEM",
+                    # Missing "id" field - will raise KeyError on line 109
+                    "item_data": {
+                        "name": "Malformed Product",
+                        "variations": [{"id": "var-123"}],
+                    },
+                },
+                {
+                    "type": "ITEM",
+                    "id": "item-good",
+                    "item_data": {
+                        "name": "Good Product",
+                        "variations": [
+                            {
+                                "id": "var-456",
+                                "item_variation_data": {
+                                    "name": "Default",
+                                    "price_money": {"amount": 1000},
+                                },
+                            }
+                        ],
+                    },
+                },
+            ]
+        }
+
+        service.square_client.list_catalog_items = AsyncMock(return_value=catalog_response)
+
+        result = await service.sync_products()
+
+        # First item should be skipped due to error, second should be created
+        assert result["created"] == 1
+        assert result["skipped"] == 1  # Exception caught and item skipped
+        assert result["total"] == 1
+
 
 class TestSyncSales:
     """Test sales synchronization"""
