@@ -349,6 +349,35 @@ class TestDeleteVendorAccount:
 
             assert exc_info.value.status_code == status.HTTP_409_CONFLICT
 
+    @pytest.mark.asyncio
+    async def test_delete_account_unexpected_error(self, mock_db, vendor_id, existing_vendor):
+        """Test account deletion with unexpected error.
+
+        This covers lines 281-283 where a generic Exception is caught
+        and converted to a 500 Internal Server Error.
+        """
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = existing_vendor
+        mock_db.query.return_value = mock_query
+
+        delete_request = DeleteAccountRequest(confirm_email="vendor@example.com")
+
+        with patch('src.routers.vendors.GDPRService') as mock_gdpr:
+            mock_gdpr_instance = MagicMock()
+            mock_gdpr_instance.create_dsar.side_effect = RuntimeError("Database connection lost")
+            mock_gdpr.return_value = mock_gdpr_instance
+
+            with pytest.raises(HTTPException) as exc_info:
+                await delete_vendor_account(
+                    delete_request=delete_request,
+                    vendor_id=vendor_id,
+                    db=mock_db,
+                )
+
+            assert exc_info.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert "Failed to delete account" in exc_info.value.detail
+
 
 class TestGetVendorDataRequests:
     """Test get_vendor_data_requests endpoint."""
