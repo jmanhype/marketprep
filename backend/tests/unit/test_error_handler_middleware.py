@@ -446,3 +446,187 @@ class TestErrorHandlerEdgeCases:
             mock_uuid.return_value.__str__ = MagicMock(return_value='test-id')
             result = await middleware.dispatch(mock_request, generic_error_call_next)
             assert result.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+
+
+class TestSetupExceptionHandlers:
+    """Test setup_exception_handlers function."""
+
+    @pytest.mark.asyncio
+    async def test_setup_http_exception_handler(self):
+        """Test HTTPException handler setup."""
+        from fastapi import FastAPI, HTTPException
+        from src.middleware.error_handler import setup_exception_handlers
+
+        app = FastAPI()
+        setup_exception_handlers(app)
+
+        # Create a test endpoint that raises HTTPException
+        @app.get("/test-http-error")
+        async def test_endpoint():
+            raise HTTPException(status_code=404, detail="Not found")
+
+        # Test the handler
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        response = client.get("/test-http-error")
+
+        assert response.status_code == 404
+        assert "error_id" in response.json()
+        assert response.json()["message"] == "Not found"
+
+    @pytest.mark.asyncio
+    async def test_setup_validation_exception_handler_production(self):
+        """Test RequestValidationError handler in production mode."""
+        from fastapi import FastAPI
+        from fastapi.exceptions import RequestValidationError
+        from pydantic import BaseModel
+        from src.middleware.error_handler import setup_exception_handlers
+
+        app = FastAPI()
+        setup_exception_handlers(app)
+
+        class Item(BaseModel):
+            name: str
+            price: float
+
+        @app.post("/test-validation")
+        async def test_endpoint(item: Item):
+            return item
+
+        # Test with invalid data
+        from fastapi.testclient import TestClient
+        with patch('src.middleware.error_handler.settings') as mock_settings:
+            mock_settings.debug = False
+
+            client = TestClient(app)
+            response = client.post("/test-validation", json={"name": "test"})  # Missing price
+
+            assert response.status_code == 422
+            data = response.json()
+            assert "error_id" in data
+            assert data["message"] == "Validation error"
+            # Details should be hidden in production
+            assert data["details"] == "Invalid request data"
+
+    @pytest.mark.asyncio
+    async def test_setup_validation_exception_handler_debug(self):
+        """Test RequestValidationError handler in debug mode."""
+        from fastapi import FastAPI
+        from pydantic import BaseModel
+        from src.middleware.error_handler import setup_exception_handlers
+
+        app = FastAPI()
+        setup_exception_handlers(app)
+
+        class Item(BaseModel):
+            name: str
+            price: float
+
+        @app.post("/test-validation-debug")
+        async def test_endpoint(item: Item):
+            return item
+
+        # Test with invalid data in debug mode
+        from fastapi.testclient import TestClient
+        with patch('src.middleware.error_handler.settings') as mock_settings:
+            mock_settings.debug = True
+
+            client = TestClient(app)
+            response = client.post("/test-validation-debug", json={"name": "test"})
+
+            assert response.status_code == 422
+            data = response.json()
+            assert "error_id" in data
+            # Details should be exposed in debug mode
+            assert isinstance(data["details"], list)
+
+    @pytest.mark.asyncio
+    async def test_setup_integrity_error_handler_unique_constraint(self):
+        """Test IntegrityError handler for unique constraint violations."""
+        from fastapi import FastAPI, Request
+        from src.middleware.error_handler import setup_exception_handlers
+
+        app = FastAPI()
+        setup_exception_handlers(app)
+
+        @app.post("/test-integrity-unique")
+        async def test_endpoint():
+            raise IntegrityError("duplicate key value violates unique constraint", None, None)
+
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        response = client.post("/test-integrity-unique")
+
+        assert response.status_code == 409
+        data = response.json()
+        assert "error_id" in data
+        assert data["message"] == "Resource already exists"
+
+    @pytest.mark.asyncio
+    async def test_setup_integrity_error_handler_foreign_key(self):
+        """Test IntegrityError handler for foreign key violations."""
+        from fastapi import FastAPI
+        from src.middleware.error_handler import setup_exception_handlers
+
+        app = FastAPI()
+        setup_exception_handlers(app)
+
+        @app.post("/test-integrity-fk")
+        async def test_endpoint():
+            raise IntegrityError("foreign key constraint fails", None, None)
+
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        response = client.post("/test-integrity-fk")
+
+        assert response.status_code == 409
+        data = response.json()
+        assert "error_id" in data
+        assert data["message"] == "Referenced resource does not exist"
+
+    @pytest.mark.asyncio
+    async def test_setup_integrity_error_handler_generic(self):
+        """Test IntegrityError handler for generic constraint violations."""
+        from fastapi import FastAPI
+        from src.middleware.error_handler import setup_exception_handlers
+
+        app = FastAPI()
+        setup_exception_handlers(app)
+
+        @app.post("/test-integrity-generic")
+        async def test_endpoint():
+            raise IntegrityError("some constraint violation", None, None)
+
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        response = client.post("/test-integrity-generic")
+
+        assert response.status_code == 409
+        data = response.json()
+        assert "error_id" in data
+        assert data["message"] == "Database constraint violation"
+
+    @pytest.mark.asyncio
+    async def test_setup_integrity_error_handler_debug_mode(self):
+        """Test IntegrityError handler includes details in debug mode."""
+        from fastapi import FastAPI
+        from src.middleware.error_handler import setup_exception_handlers
+
+        app = FastAPI()
+        setup_exception_handlers(app)
+
+        @app.post("/test-integrity-debug")
+        async def test_endpoint():
+            raise IntegrityError("unique constraint error: user_email_key", None, None)
+
+        from fastapi.testclient import TestClient
+        with patch('src.middleware.error_handler.settings') as mock_settings:
+            mock_settings.debug = True
+
+            client = TestClient(app)
+            response = client.post("/test-integrity-debug")
+
+            assert response.status_code == 409
+            data = response.json()
+            assert "details" in data
+            assert "unique constraint error" in str(data["details"])
