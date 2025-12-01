@@ -401,3 +401,25 @@ class TestGetLogger:
         # The logger adapter should merge both sets of extra fields
         # (This is implicit in the process method)
         assert logger.extra['service'] == 'api'
+
+    def test_logger_adapter_adds_extra_when_none_provided(self):
+        """Test LoggerAdapter adds extra fields when not provided in log call.
+
+        This covers line 236 in logging_config.py where kwargs['extra'] is
+        created when not present in the log call.
+        """
+        logger = get_logger('test.module.adapter', service='api', component='auth')
+
+        # Capture log output
+        stream = StringIO()
+        handler = logging.StreamHandler(stream)
+        handler.setLevel(logging.INFO)
+        logging.getLogger('test.module.adapter').addHandler(handler)
+
+        # Log WITHOUT extra parameter
+        # This triggers line 236: kwargs['extra'] = {}
+        logger.info('Test message without extra')
+
+        # Verify the logger adapter still has its extra fields
+        assert logger.extra['service'] == 'api'
+        assert logger.extra['component'] == 'auth'
