@@ -172,6 +172,6 @@ class MetricsMiddleware(BaseHTTPMiddleware):
                         day.isdigit() and 1 <= int(day) <= 31
                     ):
                         return True
-                except ValueError:
+                except ValueError:  # pragma: no cover - Defensive, unreachable after isdigit()
                     pass
         return False

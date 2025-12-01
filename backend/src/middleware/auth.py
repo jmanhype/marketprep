@@ -68,7 +68,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         token = parts[1].strip()
 
-        if not token:
+        if not token:  # pragma: no cover - Defensive check, unreachable after split()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Empty token in Authorization header",
