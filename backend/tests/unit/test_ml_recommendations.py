@@ -513,6 +513,41 @@ class TestMLRecommendationService:
         assert success is False
         assert ml_service.model_trained is False
 
+    @patch('src.services.ml_recommendations.logger')
+    def test_train_model_no_training_samples_extracted(self, mock_logger, ml_service, mock_db):
+        """Test model training when feature extraction fails for all sales
+
+        This tests the scenario where sales exist but feature extraction
+        fails for all of them, resulting in no training samples (empty X_list).
+        """
+        product_id = uuid4()
+
+        # Mock sufficient sales (20 sales)
+        mock_sales = []
+        for i in range(20):
+            sale = MagicMock()
+            sale.sale_date = datetime(2025, 1, 1) + timedelta(days=i)
+            sale.weather_temp_f = 70.0
+            sale.weather_condition = 'clear'
+            sale.line_items = [{'quantity': '10'}]
+            mock_sales.append(sale)
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = mock_sales
+
+        # Mock _extract_features to raise exception for all sales
+        # This will cause all sales to be skipped, leaving X_list empty
+        with patch.object(ml_service, '_extract_features', side_effect=Exception("Feature extraction failed")):
+            success = ml_service._train_model(product_id=product_id)
+
+            # Should return False when no samples extracted
+            assert success is False
+
+            # Should log the warning about no training samples
+            mock_logger.warning.assert_any_call("No training samples extracted")
+
     def test_generate_fallback_recommendation_with_sales_history(self, ml_service, mock_db):
         """Test fallback heuristics with sales history"""
         product_id = uuid4()

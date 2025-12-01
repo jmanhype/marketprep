@@ -587,24 +587,29 @@ class MLRecommendationService:
         y_list = []
 
         for sale in sales:
-            # Extract features for this sale date
-            features_df = self._extract_features(
-                product_id=product_id,
-                market_date=sale.sale_date,
-                weather_data={
-                    'temp_f': float(sale.weather_temp_f) if sale.weather_temp_f else 70.0,
-                    'condition': sale.weather_condition or 'clear',
-                },
-            )
+            try:
+                # Extract features for this sale date
+                features_df = self._extract_features(
+                    product_id=product_id,
+                    market_date=sale.sale_date,
+                    weather_data={
+                        'temp_f': float(sale.weather_temp_f) if sale.weather_temp_f else 70.0,
+                        'condition': sale.weather_condition or 'clear',
+                    },
+                )
 
-            # Target: total quantity sold (simplified)
-            total_quantity = 0
-            if sale.line_items:
-                for item in sale.line_items:
-                    total_quantity += int(item.get('quantity', '1'))
+                # Target: total quantity sold (simplified)
+                total_quantity = 0
+                if sale.line_items:
+                    for item in sale.line_items:
+                        total_quantity += int(item.get('quantity', '1'))
 
-            X_list.append(features_df.values[0])
-            y_list.append(total_quantity)
+                X_list.append(features_df.values[0])
+                y_list.append(total_quantity)
+            except Exception as e:
+                # Skip sales where feature extraction fails
+                logger.warning(f"Failed to extract features for sale on {sale.sale_date}: {e}")
+                continue
 
         if len(X_list) == 0:
             logger.warning("No training samples extracted")
