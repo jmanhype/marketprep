@@ -83,7 +83,6 @@ class Subscription(TenantModel):
         Index('ix_subscriptions_vendor_tier', 'vendor_id', 'tier'),
         Index('ix_subscriptions_vendor_status', 'vendor_id', 'status'),
         Index('ix_subscriptions_period_end', 'current_period_end'),
-        TenantModel.__table_args__,
     )
 
     def is_active(self) -> bool:
@@ -182,7 +181,6 @@ class UsageRecord(TenantModel):
     __table_args__ = (
         Index('ix_usage_vendor_type_period', 'vendor_id', 'usage_type', 'billing_period_start'),
         Index('ix_usage_subscription_timestamp', 'subscription_id', 'timestamp'),
-        TenantModel.__table_args__,
     )
 
 
@@ -231,7 +229,6 @@ class Invoice(TenantModel):
         Index('ix_invoices_vendor_status', 'vendor_id', 'status'),
         Index('ix_invoices_vendor_date', 'vendor_id', 'invoice_date'),
         Index('ix_invoices_due_date', 'due_date'),
-        TenantModel.__table_args__,
     )
 
 
@@ -267,5 +264,4 @@ class PaymentMethod(TenantModel):
     # Indexes
     __table_args__ = (
         Index('ix_payment_methods_vendor_default', 'vendor_id', 'is_default'),
-        TenantModel.__table_args__,
     )
