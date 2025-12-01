@@ -701,6 +701,44 @@ class TestSanitizationMiddleware:
         # Should process without error
         call_next.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_middleware_receive_function_returns_sanitized_body(self, middleware):
+        """Test that the receive() function returns the sanitized body correctly
+
+        This test specifically covers the return statement in the async receive()
+        function that's created when sanitizing JSON bodies.
+        """
+        request = MagicMock(spec=Request)
+        request.url.path = "/api/create"
+        request.query_params = {}
+        request.method = "POST"
+        request.headers = {"content-type": "application/json"}
+        request.scope = {}
+
+        # Mock body with HTML that needs sanitizing
+        body_data = {"comment": "<script>alert('xss')</script>", "name": "Test"}
+        request.body = AsyncMock(return_value=json.dumps(body_data).encode())
+
+        call_next = AsyncMock(return_value=Response())
+
+        # Process the request
+        response = await middleware.dispatch(request, call_next)
+
+        # Verify _receive was set
+        assert hasattr(request, '_receive')
+
+        # Call the receive function to cover line 456
+        result = await request._receive()
+
+        # Verify it returns the expected format with sanitized body
+        assert result["type"] == "http.request"
+        assert "body" in result
+
+        # Decode and verify the sanitized body
+        sanitized = json.loads(result["body"].decode())
+        assert "&lt;script&gt;" in sanitized["comment"]
+        assert sanitized["name"] == "Test"
+
 
 class TestSetupFunction:
     """Test setup utility function"""
