@@ -170,6 +170,10 @@ class InputValidator:
         if not email:
             return False
 
+        # Check for consecutive dots (not allowed by RFC 5322)
+        if '..' in email:
+            return False
+
         # Basic regex check
         if not cls.EMAIL_PATTERN.match(email):
             return False

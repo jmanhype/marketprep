@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from passlib.context import CryptContext
 
 from src.config import settings
@@ -45,7 +45,7 @@ class SecretsManager:
         key_bytes = settings.encryption_key.encode()
 
         # Derive 32-byte key using PBKDF2
-        kdf = PBKDF2(
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=b'marketprep_salt',  # In production, use secure random salt
