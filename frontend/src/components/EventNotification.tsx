@@ -14,7 +14,7 @@ interface EventNotificationProps {
 
 export function EventNotification({
   eventName,
-  eventDate,
+  eventDate: _eventDate,
   expectedAttendance,
   isSpecial,
   location,

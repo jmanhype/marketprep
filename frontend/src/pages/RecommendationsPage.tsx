@@ -53,7 +53,7 @@ export function RecommendationsPage() {
   const [marketDate, setMarketDate] = useState('');
   const [message, setMessage] = useState('');
   const [showFeedbackForm, setShowFeedbackForm] = useState<string | null>(null);
-  const [showStats, setShowStats] = useState(true);
+  const [showStats, _setShowStats] = useState(true);
 
   useEffect(() => {
     fetchRecommendations();
