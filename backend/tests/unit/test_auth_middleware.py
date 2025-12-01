@@ -448,7 +448,7 @@ class TestAuthMiddlewareIntegration:
 
     @pytest.mark.asyncio
     async def test_middleware_processes_request_successfully(self) -> None:
-        """Middleware should process valid authenticated request."""
+        """Middleware should process valid authenticated request (covers lines 203-205)."""
         from src.services.auth_service import AuthService
         from starlette.responses import JSONResponse
 
@@ -463,6 +463,8 @@ class TestAuthMiddlewareIntegration:
         from unittest.mock import Mock, AsyncMock
 
         request = Mock(spec=Request)
+        request.url = Mock()
+        request.url.path = "/api/v1/products"  # Protected endpoint
         request.headers = Headers({"authorization": f"Bearer {token}"})
         request.state = Mock()
 
@@ -476,6 +478,9 @@ class TestAuthMiddlewareIntegration:
         response = await auth_middleware.dispatch(request, mock_call_next)
 
         assert response.status_code == 200
+        # Verify vendor_id was set in request state (authentication succeeded)
+        assert hasattr(request.state, "vendor_id")
+        assert request.state.vendor_id == vendor_id
 
     @pytest.mark.asyncio
     async def test_middleware_rejects_unauthenticated_request(self) -> None:
