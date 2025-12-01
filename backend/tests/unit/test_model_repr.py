@@ -14,6 +14,7 @@ from src.models.sale import Sale
 from src.models.venue import Venue
 from src.models.square_token import SquareToken
 from src.models.event_data import EventData
+from src.models.recommendation_feedback import RecommendationFeedback
 from src.models.base import BaseModel, TenantModel
 
 
@@ -158,3 +159,25 @@ class TestModelRepr:
         assert "vendor-1" in result
         assert "Summer Festival" in result
         assert "500" in result
+
+    def test_recommendation_feedback_repr(self):
+        """Test RecommendationFeedback __repr__ method (covers line 121)"""
+        feedback_id = uuid4()
+        rec_id = uuid4()
+        vendor_id = uuid4()
+
+        feedback = RecommendationFeedback(
+            id=feedback_id,
+            vendor_id=vendor_id,
+            recommendation_id=rec_id,
+            rating=4,
+            variance_percentage=Decimal("15.5")
+        )
+
+        result = repr(feedback)
+
+        assert "RecommendationFeedback" in result
+        assert str(feedback_id) in result
+        assert str(rec_id) in result
+        assert "4" in result
+        assert "15.5" in result
