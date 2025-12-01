@@ -23,7 +23,7 @@ from src.monitoring.metrics import (
     http_requests_in_progress,
     http_response_size_bytes,
 )
-from src.core.logging import get_logger
+from src.logging_config import get_logger
 
 logger = get_logger(__name__)
 

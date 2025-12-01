@@ -4,7 +4,7 @@ from typing import Generator, Optional
 from redis import Redis
 
 from src.config import settings
-from src.core.logging import get_logger
+from src.logging_config import get_logger
 
 logger = get_logger(__name__)
 
