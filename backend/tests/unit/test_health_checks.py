@@ -1023,3 +1023,75 @@ class TestHealthCheckerAdditionalCoverage:
         # ML model check should show degraded due to exception caught in check_ml_model
         assert "ml_model" in result["checks"]
         assert result["checks"]["ml_model"]["status"] == "degraded"
+
+    @pytest.mark.asyncio
+    @patch('src.monitoring.health_checks.settings')
+    @patch('src.monitoring.health_checks.logger')
+    @patch('shutil.disk_usage')
+    @patch('psutil.virtual_memory')
+    @patch('os.path.exists')
+    async def test_check_all_handles_check_method_exception(
+        self,
+        mock_exists,
+        mock_memory,
+        mock_disk,
+        mock_logger,
+        mock_settings,
+    ):
+        """Test check_all handles exception raised by check method itself.
+
+        This covers lines 134-135 where asyncio.gather with return_exceptions=True
+        catches an exception that is NOT handled by the individual check method,
+        and logs the error before creating an unhealthy check result.
+        """
+        mock_settings.version = "1.0.0"
+        mock_settings.environment = "test"
+        mock_settings.square_application_id = None
+        mock_settings.openweather_api_key = None
+        mock_settings.eventbrite_api_key = None
+
+        # Mock system checks to work normally
+        mock_exists.return_value = True
+
+        mock_mem = MagicMock()
+        mock_mem.total = 16 * (1024 ** 3)
+        mock_mem.available = 10 * (1024 ** 3)
+        mock_mem.percent = 37.5
+        mock_memory.return_value = mock_mem
+
+        mock_usage = MagicMock()
+        mock_usage.total = 1000 * (1024 ** 3)
+        mock_usage.used = 500 * (1024 ** 3)
+        mock_usage.free = 500 * (1024 ** 3)
+        mock_disk.return_value = mock_usage
+
+        # Create checker with normal database and redis
+        mock_db = MagicMock()
+        mock_result = MagicMock()
+        mock_result.fetchone.return_value = (1,)
+        mock_db.execute.return_value = mock_result
+
+        mock_redis = MagicMock()
+        mock_redis.ping.return_value = True
+
+        checker = HealthChecker(db_session=mock_db, redis_client=mock_redis)
+
+        # Mock check_database to raise an exception directly
+        # (not caught by check_database's own try/except)
+        with patch.object(checker, 'check_database', side_effect=RuntimeError("Unexpected check failure")):
+            result = await checker.check_all()
+
+            # Check should still complete
+            assert "checks" in result
+            assert "database" in result["checks"]
+
+            # Database check should show as unhealthy with error details
+            assert result["checks"]["database"]["status"] == "unhealthy"
+            assert "error" in result["checks"]["database"]["details"]
+            assert "Unexpected check failure" in result["checks"]["database"]["details"]["error"]
+
+            # Verify logger.error was called for the failure (line 134)
+            mock_logger.error.assert_called_once()
+            error_call_args = mock_logger.error.call_args[0][0]
+            assert "database" in error_call_args
+            assert "Unexpected check failure" in str(error_call_args)
