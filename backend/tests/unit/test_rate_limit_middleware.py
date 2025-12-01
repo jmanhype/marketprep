@@ -336,6 +336,18 @@ class TestClientIPExtraction:
 
         assert identifier == "ip:192.168.1.50"
 
+    def test_get_client_ip_returns_unknown_when_no_client(self, setup_middleware):
+        """Test _get_client_ip returns 'unknown' when request.client is None (covers line 188)."""
+        middleware = setup_middleware
+
+        request = MagicMock(spec=Request)
+        request.headers = {}
+        request.client = None  # No client
+
+        ip = middleware._get_client_ip(request)
+
+        assert ip == "unknown"
+
 
 class TestGracefulDegradation:
     """Test graceful degradation on Redis failures."""
@@ -447,3 +459,58 @@ class TestRateLimitConfig:
         assert isinstance(config, RateLimitConfig)
         assert config.limit == 5
         assert config.window_seconds == 3600
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_config_uses_vendor_id_for_authenticated(self):
+        """Test RateLimitConfig uses vendor_id for authenticated requests (covers line 292)."""
+        with patch('src.middleware.rate_limit.Redis') as mock_redis_class:
+            mock_redis = MagicMock()
+            mock_pipeline = MagicMock()
+            mock_pipeline.execute.return_value = [None, 2, None, None]  # 2 requests
+            mock_redis.pipeline.return_value = mock_pipeline
+            mock_redis_class.from_url.return_value = mock_redis
+
+            config = RateLimitConfig(limit=5, window_seconds=60, redis_client=mock_redis)
+
+            request = MagicMock(spec=Request)
+            request.url.path = "/api/expensive"
+            request.state = SimpleNamespace(vendor_id="vendor123")
+            request.client = MagicMock()
+            request.client.host = "192.168.1.100"
+
+            # Should not raise (under limit)
+            await config(request)
+
+            # Verify the pipeline was called with vendor-based key
+            mock_pipeline.zadd.assert_called_once()
+            call_args = mock_pipeline.zadd.call_args
+            # First argument should contain "vendor:vendor123"
+            assert "vendor:vendor123" in call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_config_handles_exception_during_check(self, caplog):
+        """Test RateLimitConfig fails open when exception occurs during check (covers lines 334-335)."""
+        with patch('src.middleware.rate_limit.Redis') as mock_redis_class:
+            mock_redis = MagicMock()
+            mock_redis_class.from_url.return_value = mock_redis
+
+            # Mock pipeline to raise exception during execute
+            mock_pipeline = MagicMock()
+            mock_pipeline.execute.side_effect = RuntimeError("Redis pipeline error")
+            mock_redis.pipeline.return_value = mock_pipeline
+
+            config = RateLimitConfig(limit=5, window_seconds=60, redis_client=mock_redis)
+
+            request = MagicMock(spec=Request)
+            request.state = SimpleNamespace()
+            request.client = MagicMock()
+            request.client.host = "192.168.1.1"
+            request.url.path = "/api/test"
+
+            with caplog.at_level(logging.WARNING):
+                # Should not raise (fail-open)
+                await config(request)
+
+                # Verify warning was logged
+                assert any("Custom rate limit check failed" in record.message for record in caplog.records)
+                assert any("allowing request (fail-open)" in record.message for record in caplog.records)
