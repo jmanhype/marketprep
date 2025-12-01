@@ -189,7 +189,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         ]
 
         # Skip authentication for public paths
-        if any(request.url.path.startswith(path) for path in public_paths):
+        # Special case: root path must be exact match
+        if request.url.path == "/" or any(
+            request.url.path.startswith(path) for path in public_paths[1:]
+        ):
             response = await call_next(request)
             return response
 
