@@ -2,6 +2,7 @@
 
 Endpoints:
 - GET /products - List products
+- POST /products - Create product
 - POST /products/sync - Sync from Square
 - GET /products/{id} - Get product details
 - PUT /products/{id} - Update product
@@ -40,6 +41,19 @@ class ProductResponse(BaseModel):
         from_attributes = True
 
 
+class ProductCreate(BaseModel):
+    """Product creation schema."""
+
+    name: str
+    description: Optional[str] = None
+    price: Optional[float] = None
+    category: Optional[str] = None
+    unit: Optional[str] = None
+    typical_price: Optional[float] = None
+    is_active: bool = True
+    is_seasonal: bool = False
+
+
 class SyncResponse(BaseModel):
     """Sync response schema."""
 
@@ -47,6 +61,61 @@ class SyncResponse(BaseModel):
     updated: int
     skipped: int
     total: int
+
+
+@router.post("", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+def create_product(
+    product_data: ProductCreate,
+    vendor_id: UUID = Depends(get_current_vendor),
+    db: Session = Depends(get_db),
+) -> ProductResponse:
+    """Create a new product.
+
+    Args:
+        product_data: Product data
+        vendor_id: Current vendor ID
+        db: Database session
+
+    Returns:
+        Created product
+    """
+    from uuid import uuid4
+    from decimal import Decimal
+
+    # Use price if provided, otherwise use typical_price
+    price = product_data.price if product_data.price is not None else product_data.typical_price
+    if price is None:
+        price = 0.0
+
+    product = Product(
+        id=uuid4(),
+        vendor_id=vendor_id,
+        name=product_data.name,
+        description=product_data.description,
+        price=Decimal(str(price)),
+        category=product_data.category,
+        unit=product_data.unit,
+        is_active=product_data.is_active,
+        is_seasonal=product_data.is_seasonal,
+    )
+
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+
+    return ProductResponse(
+        id=product.id,
+        name=product.name,
+        description=product.description,
+        price=float(product.price),
+        category=product.category,
+        is_active=product.is_active,
+        is_seasonal=product.is_seasonal,
+        square_item_id=product.square_item_id,
+        square_synced_at=product.square_synced_at.isoformat()
+        if product.square_synced_at
+        else None,
+    )
 
 
 @router.get("", response_model=List[ProductResponse])
