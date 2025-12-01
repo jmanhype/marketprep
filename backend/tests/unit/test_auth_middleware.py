@@ -10,11 +10,21 @@ from fastapi import Request, HTTPException, status
 from starlette.datastructures import Headers
 
 # Module under test - will be implemented in T021
-from src.middleware.auth import AuthMiddleware, get_current_vendor
+from src.middleware.auth import AuthMiddleware, get_current_vendor, get_current_email
 
 
 class TestAuthMiddlewareTokenExtraction:
     """Test JWT token extraction from Authorization header."""
+
+    def test_middleware_init_with_app(self) -> None:
+        """Test middleware initialization with app parameter (covers line 37)"""
+        from unittest.mock import Mock
+
+        mock_app = Mock()
+        auth_middleware = AuthMiddleware(app=mock_app)
+
+        # Verify middleware was initialized
+        assert auth_middleware.auth_service is not None
 
     def test_extract_token_from_bearer_header(self) -> None:
         """Extract token from 'Bearer <token>' Authorization header."""
@@ -68,6 +78,19 @@ class TestAuthMiddlewareTokenExtraction:
                 auth_middleware.extract_token(request)
 
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_empty_token_after_bearer_raises_401(self) -> None:
+        """Empty token after 'Bearer' should raise 401 (covers line 72)"""
+        # Test "Bearer \t" - tab character that will be stripped to empty
+        request = self._create_request_with_auth_header("Bearer \t")
+
+        auth_middleware = AuthMiddleware()
+
+        with pytest.raises(HTTPException) as exc_info:
+            auth_middleware.extract_token(request)
+
+        assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "empty token" in str(exc_info.value.detail).lower()
 
     def _create_request_with_auth_header(self, auth_value: str | None) -> Request:
         """Helper to create mock request with Authorization header."""
@@ -189,6 +212,46 @@ class TestAuthMiddlewareTokenValidation:
 
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "token" in str(exc_info.value.detail).lower()
+
+    def test_token_missing_vendor_id_claim_raises_401(self) -> None:
+        """Token without vendor_id claim should raise 401 (covers line 103)"""
+        from src.services.auth_service import AuthService
+        from unittest.mock import patch
+
+        auth_service = AuthService()
+        vendor_id = uuid4()
+        token = auth_service.generate_access_token(vendor_id=vendor_id, email="test@example.com")
+
+        request = self._create_request_with_token(token)
+        auth_middleware = AuthMiddleware()
+
+        # Mock validate_token to return payload without vendor_id
+        with patch.object(auth_middleware.auth_service, 'validate_token', return_value={"email": "test@example.com"}):
+            with pytest.raises(HTTPException) as exc_info:
+                auth_middleware.authenticate(request)
+
+            assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+            assert "vendor_id" in str(exc_info.value.detail).lower()
+
+    def test_invalid_vendor_id_format_raises_401(self) -> None:
+        """Invalid vendor_id format should raise 401 (covers line 125)"""
+        from src.services.auth_service import AuthService
+        from unittest.mock import patch
+
+        auth_service = AuthService()
+        vendor_id = uuid4()
+        token = auth_service.generate_access_token(vendor_id=vendor_id, email="test@example.com")
+
+        request = self._create_request_with_token(token)
+        auth_middleware = AuthMiddleware()
+
+        # Mock validate_token to return invalid vendor_id format
+        with patch.object(auth_middleware.auth_service, 'validate_token', return_value={"vendor_id": "not-a-valid-uuid", "email": "test@example.com"}):
+            with pytest.raises(HTTPException) as exc_info:
+                auth_middleware.authenticate(request)
+
+            assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+            assert "vendor_id" in str(exc_info.value.detail).lower()
 
     def _create_request_with_token(self, token: str) -> Request:
         """Helper to create mock request with Bearer token."""
@@ -327,6 +390,48 @@ class TestGetCurrentVendorDependency:
         else:
             # Simulate missing vendor_id attribute
             del mock_request.state.vendor_id
+
+        return mock_request
+
+
+class TestGetCurrentEmailDependency:
+    """Test FastAPI dependency for getting current authenticated email."""
+
+    def test_get_current_email_returns_email(self) -> None:
+        """get_current_email dependency should return email from request state."""
+        email = "vendor@example.com"
+
+        # Create request with email in state
+        request = self._create_request_with_email(email)
+
+        # Call dependency
+        result = get_current_email(request)
+
+        assert result == email
+
+    def test_get_current_email_without_auth_raises_401(self) -> None:
+        """get_current_email without authenticated request should raise 401 (covers lines 235-241)"""
+        # Create request without email in state
+        request = self._create_request_with_email(None)
+
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_email(request)
+
+        assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "not authenticated" in str(exc_info.value.detail).lower()
+
+    def _create_request_with_email(self, email: str | None) -> Request:
+        """Helper to create mock request with email in state."""
+        from unittest.mock import Mock
+
+        mock_request = Mock(spec=Request)
+        mock_request.state = Mock()
+
+        if email is not None:
+            mock_request.state.email = email
+        else:
+            # Simulate missing email attribute
+            del mock_request.state.email
 
         return mock_request
 
