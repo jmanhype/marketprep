@@ -481,7 +481,6 @@ class TestCreateProduct:
             description="Test description",
             price=19.99,
             category="Electronics",
-            unit="each",
             is_active=True,
             is_seasonal=False,
         )
@@ -572,7 +571,6 @@ class TestCreateProduct:
             description="Testing response format",
             price=25.00,
             category="Test",
-            unit="box",
             is_active=True,
             is_seasonal=False,
         )

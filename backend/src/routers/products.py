@@ -48,7 +48,6 @@ class ProductCreate(BaseModel):
     description: Optional[str] = None
     price: Optional[float] = None
     category: Optional[str] = None
-    unit: Optional[str] = None
     typical_price: Optional[float] = None
     is_active: bool = True
     is_seasonal: bool = False
@@ -94,7 +93,6 @@ def create_product(
         description=product_data.description,
         price=Decimal(str(price)),
         category=product_data.category,
-        unit=product_data.unit,
         is_active=product_data.is_active,
         is_seasonal=product_data.is_seasonal,
     )
