@@ -13,7 +13,7 @@ from src.config import Settings
 def test_settings() -> Settings:
     """Override settings for testing."""
     return Settings(
-        database_url="postgresql://marketprep:devpassword@localhost:5432/marketprep_test",
+        database_url="postgresql://marketprep:devpassword@localhost:5433/marketprep_test",
         redis_url="redis://localhost:6379/15",  # Separate Redis DB for tests
         environment="development",  # Must be development|staging|production
         debug=True,
