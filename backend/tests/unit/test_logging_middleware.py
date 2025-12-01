@@ -254,5 +254,213 @@ class TestGetLoggerDependency:
         assert logger.correlation_id == "dep-test-id"
 
 
-# Skipping configure_logging tests due to global state interactions that cause timeouts
-# Coverage for configure_logging will be achieved through integration tests
+class TestConfigureLogging:
+    """Test configure_logging function"""
+
+    @pytest.fixture(autouse=True)
+    def cleanup_logging(self):
+        """Save and restore root logger state for each test"""
+        root_logger = logging.getLogger()
+        original_level = root_logger.level
+        original_handlers = root_logger.handlers.copy()
+
+        yield
+
+        # Restore original state
+        root_logger.setLevel(original_level)
+        root_logger.handlers.clear()
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+
+    def test_configure_logging_production_json_format(self):
+        """Test production environment uses JSON formatter"""
+        with patch('src.config.settings') as mock_settings:
+            mock_settings.environment = "production"
+            mock_settings.log_level = "INFO"
+
+            # Call configure_logging
+            configure_logging()
+
+            # Verify root logger configuration
+            root_logger = logging.getLogger()
+            assert root_logger.level == logging.INFO
+            assert len(root_logger.handlers) == 1
+
+            # Verify handler
+            handler = root_logger.handlers[0]
+            assert isinstance(handler, logging.StreamHandler)
+            assert handler.level == logging.INFO
+
+            # Verify formatter creates JSON output
+            formatter = handler.formatter
+            record = logging.LogRecord(
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="Test message",
+                args=(),
+                exc_info=None
+            )
+            formatted = formatter.format(record)
+
+            # Should be valid JSON
+            import json
+            parsed = json.loads(formatted)
+            assert parsed["level"] == "INFO"
+            assert parsed["message"] == "Test message"
+
+    def test_configure_logging_development_human_readable_format(self):
+        """Test development environment uses human-readable formatter"""
+        with patch('src.config.settings') as mock_settings:
+            mock_settings.environment = "development"
+            mock_settings.log_level = "DEBUG"
+
+            # Call configure_logging
+            configure_logging()
+
+            # Verify root logger configuration
+            root_logger = logging.getLogger()
+            assert root_logger.level == logging.DEBUG
+            assert len(root_logger.handlers) == 1
+
+            # Verify handler
+            handler = root_logger.handlers[0]
+            assert isinstance(handler, logging.StreamHandler)
+            assert handler.level == logging.DEBUG
+
+    def test_configure_logging_json_formatter_with_correlation_id(self):
+        """Test JSON formatter includes correlation_id from record"""
+        with patch('src.config.settings') as mock_settings:
+            mock_settings.environment = "production"
+            mock_settings.log_level = "INFO"
+
+            configure_logging()
+
+            # Get formatter
+            handler = logging.getLogger().handlers[0]
+            formatter = handler.formatter
+
+            # Create record with correlation_id
+            record = logging.LogRecord(
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="Test message",
+                args=(),
+                exc_info=None
+            )
+            record.correlation_id = "test-corr-123"
+
+            formatted = formatter.format(record)
+
+            import json
+            parsed = json.loads(formatted)
+            assert parsed["correlation_id"] == "test-corr-123"
+
+    def test_configure_logging_json_formatter_with_request_fields(self):
+        """Test JSON formatter includes method, path, duration_ms"""
+        with patch('src.config.settings') as mock_settings:
+            mock_settings.environment = "production"
+            mock_settings.log_level = "INFO"
+
+            configure_logging()
+
+            # Get formatter
+            handler = logging.getLogger().handlers[0]
+            formatter = handler.formatter
+
+            # Create record with request fields
+            record = logging.LogRecord(
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="Request completed",
+                args=(),
+                exc_info=None
+            )
+            record.method = "GET"
+            record.path = "/api/test"
+            record.duration_ms = 125.5
+
+            formatted = formatter.format(record)
+
+            import json
+            parsed = json.loads(formatted)
+            assert parsed["method"] == "GET"
+            assert parsed["path"] == "/api/test"
+            assert parsed["duration_ms"] == 125.5
+
+    def test_configure_logging_json_formatter_with_exception(self):
+        """Test JSON formatter includes exception info"""
+        with patch('src.config.settings') as mock_settings:
+            mock_settings.environment = "production"
+            mock_settings.log_level = "INFO"
+
+            configure_logging()
+
+            # Get formatter
+            handler = logging.getLogger().handlers[0]
+            formatter = handler.formatter
+
+            # Create record with exception
+            try:
+                raise ValueError("Test exception")
+            except ValueError:
+                import sys
+                exc_info = sys.exc_info()
+
+                record = logging.LogRecord(
+                    name="test",
+                    level=logging.ERROR,
+                    pathname="",
+                    lineno=0,
+                    msg="Error occurred",
+                    args=(),
+                    exc_info=exc_info
+                )
+
+                formatted = formatter.format(record)
+
+                import json
+                parsed = json.loads(formatted)
+                assert "exception" in parsed
+                assert "ValueError" in parsed["exception"]
+                assert "Test exception" in parsed["exception"]
+
+    def test_configure_logging_clears_existing_handlers(self):
+        """Test configure_logging clears existing handlers"""
+        # Add a dummy handler
+        root_logger = logging.getLogger()
+        dummy_handler = logging.StreamHandler()
+        root_logger.addHandler(dummy_handler)
+
+        initial_handler_count = len(root_logger.handlers)
+        assert initial_handler_count > 0
+
+        with patch('src.config.settings') as mock_settings:
+            mock_settings.environment = "development"
+            mock_settings.log_level = "INFO"
+
+            configure_logging()
+
+            # Should have exactly 1 handler (old ones cleared)
+            assert len(root_logger.handlers) == 1
+            assert root_logger.handlers[0] != dummy_handler
+
+    def test_configure_logging_reduces_third_party_noise(self):
+        """Test third-party loggers are set to WARNING level"""
+        with patch('src.config.settings') as mock_settings:
+            mock_settings.environment = "development"
+            mock_settings.log_level = "DEBUG"
+
+            configure_logging()
+
+            # Verify third-party loggers have WARNING level
+            uvicorn_logger = logging.getLogger("uvicorn.access")
+            sqlalchemy_logger = logging.getLogger("sqlalchemy.engine")
+
+            assert uvicorn_logger.level == logging.WARNING
+            assert sqlalchemy_logger.level == logging.WARNING
