@@ -194,9 +194,7 @@ jobs:
         with:
           context: ./backend
           push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && secrets.DOCKER_USERNAME != '' }}
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/marketprep-backend:latest
-            ${{ secrets.DOCKER_USERNAME }}/marketprep-backend:${{ github.sha }}
+          tags: ${{ secrets.DOCKER_USERNAME != '' && format('{0}/marketprep-backend:latest,{0}/marketprep-backend:{1}', secrets.DOCKER_USERNAME, github.sha) || format('marketprep-backend:latest,marketprep-backend:{0}', github.sha) }}
           cache-from: ${{ secrets.DOCKER_USERNAME != '' && format('type=registry,ref={0}/marketprep-backend:buildcache', secrets.DOCKER_USERNAME) || '' }}
           cache-to: ${{ secrets.DOCKER_USERNAME != '' && format('type=registry,ref={0}/marketprep-backend:buildcache,mode=max', secrets.DOCKER_USERNAME) || '' }}
 
@@ -205,8 +203,6 @@ jobs:
         with:
           context: ./frontend
           push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && secrets.DOCKER_USERNAME != '' }}
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/marketprep-frontend:latest
-            ${{ secrets.DOCKER_USERNAME }}/marketprep-frontend:${{ github.sha }}
+          tags: ${{ secrets.DOCKER_USERNAME != '' && format('{0}/marketprep-frontend:latest,{0}/marketprep-frontend:{1}', secrets.DOCKER_USERNAME, github.sha) || format('marketprep-frontend:latest,marketprep-frontend:{0}', github.sha) }}
           cache-from: ${{ secrets.DOCKER_USERNAME != '' && format('type=registry,ref={0}/marketprep-frontend:buildcache', secrets.DOCKER_USERNAME) || '' }}
           cache-to: ${{ secrets.DOCKER_USERNAME != '' && format('type=registry,ref={0}/marketprep-frontend:buildcache,mode=max', secrets.DOCKER_USERNAME) || '' }}
