@@ -217,11 +217,12 @@ locust -f locustfile.py
 
 ### Test Documentation
 
-- [E2E Test Summary](E2E_TEST_SUMMARY.md) - Quick overview with pass/fail results
-- [E2E Test Report](E2E_TEST_REPORT.md) - Detailed analysis with 22 screenshots
-- [Frontend Test Report](FRONTEND_TEST_REPORT.md) - UX validation results
-- [Dogfooding Checklist](DOGFOOD_CHECKLIST.md) - 13-phase validation
-- [Release Certification](RELEASE_READY.md) - Production readiness sign-off
+- [Testing Documentation](docs/testing/README.md) - Complete testing guide
+- [E2E Test Summary](docs/testing/E2E_TEST_SUMMARY.md) - Quick overview with pass/fail results
+- [E2E Test Report](docs/testing/E2E_TEST_REPORT.md) - Detailed analysis with 22 screenshots
+- [Frontend Test Report](docs/testing/FRONTEND_TEST_REPORT.md) - UX validation results
+- [Dogfooding Checklist](docs/testing/DOGFOOD_CHECKLIST.md) - 13-phase validation
+- [Release Certification](docs/RELEASE_READY.md) - Production readiness sign-off
 
 ---
 
