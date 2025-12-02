@@ -257,7 +257,7 @@ export class ApiClient {
 export const apiClient = new ApiClient({
   onAuthError: () => {
     // Redirect to login on auth error
-    window.location.href = '/login';
+    window.location.href = '/auth/login';
   },
 });
 

@@ -1,0 +1,49 @@
+{
+  "registration": {
+    "success": true,
+    "error": null,
+    "redirectUrl": "http://localhost:3000/auth/register"
+  },
+  "login": {
+    "success": true,
+    "error": null,
+    "note": "Auto-logged in after registration"
+  },
+  "dashboard": {
+    "success": true,
+    "error": null,
+    "features": [
+      "Page title: MarketPrep",
+      "1 buttons found",
+      "1 links found"
+    ]
+  },
+  "products": {
+    "success": true,
+    "error": null,
+    "features": [
+      "Page title: MarketPrep",
+      "1 buttons found"
+    ]
+  },
+  "recommendations": {
+    "success": true,
+    "error": null,
+    "features": [
+      "Page title: MarketPrep",
+      "1 buttons found"
+    ]
+  },
+  "settings": {
+    "success": true,
+    "error": null,
+    "features": [
+      "Page title: MarketPrep",
+      "Square/POS integration visible: false"
+    ]
+  },
+  "logout": {
+    "success": false,
+    "error": "Logout button not found"
+  }
+}

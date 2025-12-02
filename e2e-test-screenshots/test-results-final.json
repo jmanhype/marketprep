@@ -1,0 +1,82 @@
+{
+  "testCredentials": {
+    "email": "e2etest1764653449543@gmail.com",
+    "password": "TestPass123!",
+    "businessName": "E2E Test Farm"
+  },
+  "registration": {
+    "success": true,
+    "error": null,
+    "redirectUrl": "http://localhost:3000/"
+  },
+  "login": {
+    "success": true,
+    "error": null,
+    "note": "Auto-logged in after registration"
+  },
+  "dashboard": {
+    "success": true,
+    "error": null,
+    "features": [
+      "Page title: MarketPrep",
+      "Welcome message: false",
+      "Navigation present: false"
+    ],
+    "uiElements": {
+      "buttons": 1,
+      "links": 1,
+      "navigation": 0,
+      "hasContent": true
+    }
+  },
+  "products": {
+    "success": true,
+    "error": null,
+    "features": [
+      "Page title: MarketPrep",
+      "Product features visible: true",
+      "Forms present: true",
+      "Tables present: false"
+    ],
+    "uiElements": {
+      "buttons": 1,
+      "forms": 1,
+      "tables": 0,
+      "hasContent": true
+    }
+  },
+  "recommendations": {
+    "success": true,
+    "error": null,
+    "features": [
+      "Page title: MarketPrep",
+      "Recommendations visible: true",
+      "Cards present: false"
+    ],
+    "uiElements": {
+      "buttons": 1,
+      "cards": 0,
+      "hasContent": true
+    }
+  },
+  "settings": {
+    "success": true,
+    "error": null,
+    "features": [
+      "Page title: MarketPrep",
+      "User info displayed: false",
+      "Square POS integration: false",
+      "Settings forms: true"
+    ],
+    "uiElements": {
+      "forms": 1,
+      "inputs": 2,
+      "hasSquareIntegration": false,
+      "hasUserInfo": false
+    }
+  },
+  "logout": {
+    "success": false,
+    "error": "Logout button not found"
+  }
+}

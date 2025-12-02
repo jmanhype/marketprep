@@ -1,0 +1,110 @@
+{
+  "registration": {
+    "success": false,
+    "error": null,
+    "consoleLogs": [
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+        "timestamp": "2025-12-02T05:29:15.659Z"
+      }
+    ],
+    "networkErrors": [
+      {
+        "url": "http://localhost:8000/api/v1/auth/register",
+        "status": 422,
+        "statusText": "Unprocessable Entity"
+      }
+    ],
+    "responseBody": {
+      "detail": [
+        {
+          "type": "value_error",
+          "loc": [
+            "body",
+            "email"
+          ],
+          "msg": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email.",
+          "input": "e2etest@marketprep.test",
+          "ctx": {
+            "reason": "The part after the @-sign is a special-use or reserved name that cannot be used with email."
+          }
+        }
+      ]
+    },
+    "redirectUrl": "http://localhost:3000/auth/register",
+    "errorMessages": [
+      "*",
+      "*",
+      "*",
+      "*"
+    ]
+  },
+  "login": {
+    "success": false,
+    "error": null,
+    "consoleLogs": [
+      {
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+        "timestamp": "2025-12-02T05:29:18.418Z"
+      }
+    ],
+    "networkErrors": [
+      {
+        "url": "http://localhost:8000/api/v1/auth/login",
+        "status": 422,
+        "statusText": "Unprocessable Entity"
+      }
+    ],
+    "responseBody": {
+      "detail": [
+        {
+          "type": "value_error",
+          "loc": [
+            "body",
+            "email"
+          ],
+          "msg": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email.",
+          "input": "e2etest@marketprep.test",
+          "ctx": {
+            "reason": "The part after the @-sign is a special-use or reserved name that cannot be used with email."
+          }
+        }
+      ]
+    },
+    "redirectUrl": "http://localhost:3000/auth/login",
+    "errorMessages": [
+      "*",
+      "*"
+    ]
+  },
+  "dashboard": {
+    "success": false,
+    "error": "Not authenticated",
+    "features": [],
+    "content": ""
+  },
+  "products": {
+    "success": false,
+    "error": "Not authenticated",
+    "features": [],
+    "content": ""
+  },
+  "recommendations": {
+    "success": false,
+    "error": "Not authenticated",
+    "features": [],
+    "content": ""
+  },
+  "settings": {
+    "success": false,
+    "error": "Not authenticated",
+    "features": [],
+    "content": ""
+  },
+  "logout": {
+    "success": false,
+    "error": null
+  }
+}
