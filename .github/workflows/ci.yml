@@ -193,20 +193,20 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') }}
+          push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && secrets.DOCKER_USERNAME != '' }}
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/marketprep-backend:latest
             ${{ secrets.DOCKER_USERNAME }}/marketprep-backend:${{ github.sha }}
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/marketprep-backend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/marketprep-backend:buildcache,mode=max
+          cache-from: ${{ secrets.DOCKER_USERNAME != '' && format('type=registry,ref={0}/marketprep-backend:buildcache', secrets.DOCKER_USERNAME) || '' }}
+          cache-to: ${{ secrets.DOCKER_USERNAME != '' && format('type=registry,ref={0}/marketprep-backend:buildcache,mode=max', secrets.DOCKER_USERNAME) || '' }}
 
       - name: Build frontend image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
-          push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') }}
+          push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && secrets.DOCKER_USERNAME != '' }}
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/marketprep-frontend:latest
             ${{ secrets.DOCKER_USERNAME }}/marketprep-frontend:${{ github.sha }}
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/marketprep-frontend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/marketprep-frontend:buildcache,mode=max
+          cache-from: ${{ secrets.DOCKER_USERNAME != '' && format('type=registry,ref={0}/marketprep-frontend:buildcache', secrets.DOCKER_USERNAME) || '' }}
+          cache-to: ${{ secrets.DOCKER_USERNAME != '' && format('type=registry,ref={0}/marketprep-frontend:buildcache,mode=max', secrets.DOCKER_USERNAME) || '' }}
