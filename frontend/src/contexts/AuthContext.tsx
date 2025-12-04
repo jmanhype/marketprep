@@ -131,12 +131,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setVendor(response.vendor);
     } catch (error: any) {
       // Re-throw with user-friendly message
+      const errorMessage = error.response?.data?.detail || error.response?.data?.message;
+
       if (error.response?.status === 401) {
         throw new Error('Invalid email or password');
       }
 
       throw new Error(
-        error.response?.data?.message || 'Login failed. Please try again.'
+        errorMessage || 'Login failed. Please try again.'
       );
     }
   };
@@ -167,12 +169,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setVendor(response.vendor);
     } catch (error: any) {
       // Re-throw with user-friendly message
-      if (error.response?.status === 409) {
+      const errorMessage = error.response?.data?.detail || error.response?.data?.message;
+
+      if (error.response?.status === 400 && errorMessage?.includes('already registered')) {
         throw new Error('An account with this email already exists');
       }
 
       throw new Error(
-        error.response?.data?.message || 'Registration failed. Please try again.'
+        errorMessage || 'Registration failed. Please try again.'
       );
     }
   };
