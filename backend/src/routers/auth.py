@@ -6,7 +6,7 @@ Endpoints:
 - POST /auth/refresh: Refresh access token using refresh token
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from passlib.context import CryptContext
+import bcrypt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from uuid import uuid4
@@ -25,11 +25,41 @@ from src.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-# Password hashing context (bcrypt)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # Auth service instance
 auth_service = AuthService()
+
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt.
+
+    Args:
+        password: Plain text password
+
+    Returns:
+        Bcrypt hash string
+    """
+    # bcrypt requires bytes
+    password_bytes = password.encode('utf-8')
+    # Generate salt and hash
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    # Return as string
+    return hashed.decode('utf-8')
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against a bcrypt hash.
+
+    Args:
+        password: Plain text password to verify
+        hashed: Bcrypt hash to check against
+
+    Returns:
+        True if password matches, False otherwise
+    """
+    password_bytes = password.encode('utf-8')
+    hashed_bytes = hashed.encode('utf-8')
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 
 class RegisterRequest(BaseModel):
@@ -72,7 +102,7 @@ def register(
         )
 
     # Hash password
-    password_hash = pwd_context.hash(registration.password)
+    password_hash = hash_password(registration.password)
 
     # Create new vendor
     new_vendor = Vendor(
@@ -141,7 +171,7 @@ def login(
         )
 
     # Verify password
-    if not pwd_context.verify(credentials.password, vendor.password_hash):
+    if not verify_password(credentials.password, vendor.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",

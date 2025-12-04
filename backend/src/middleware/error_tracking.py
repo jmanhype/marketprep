@@ -181,7 +181,6 @@ class ErrorTrackingMiddleware(BaseHTTPMiddleware):
             Error context dictionary
         """
         context = {
-            'correlation_id': correlation_id,
             'url': str(request.url),
             'method': request.method,
             'path': request.url.path,

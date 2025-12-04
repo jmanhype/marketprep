@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from passlib.context import CryptContext
+import bcrypt
 
 from src.config import settings
 
@@ -31,9 +31,6 @@ class SecretsManager:
         """Initialize secrets manager with encryption key."""
         # Derive Fernet key from encryption key
         self.fernet = self._get_fernet_cipher()
-
-        # Password hashing context (bcrypt)
-        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     def _get_fernet_cipher(self) -> Fernet:
         """Get Fernet cipher from encryption key.
@@ -97,7 +94,10 @@ class SecretsManager:
         Returns:
             Hashed password
         """
-        return self.pwd_context.hash(password)
+        password_bytes = password.encode('utf-8')
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password_bytes, salt)
+        return hashed.decode('utf-8')
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash.
@@ -109,7 +109,9 @@ class SecretsManager:
         Returns:
             True if password matches, False otherwise
         """
-        return self.pwd_context.verify(plain_password, hashed_password)
+        password_bytes = plain_password.encode('utf-8')
+        hashed_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
 
     @staticmethod
     def generate_api_key(prefix: str = "mp", length: int = 32) -> str:
