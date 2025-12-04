@@ -174,6 +174,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Raises:
             HTTPException: 401 if authentication fails
         """
+        # Skip authentication for CORS preflight OPTIONS requests
+        if request.method == "OPTIONS":
+            response = await call_next(request)
+            return response
+
         # Paths that don't require authentication
         public_paths = [
             "/",

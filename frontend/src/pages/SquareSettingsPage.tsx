@@ -45,10 +45,52 @@ export function SquareSettingsPage() {
         state: string;
       }>('/api/v1/square/connect');
 
-      // Redirect to Square OAuth
-      window.location.href = data.authorization_url;
+      // Open OAuth in popup to preserve session
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+
+      const popup = window.open(
+        data.authorization_url,
+        'square-oauth',
+        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+      );
+
+      // Handle popup blocker
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        alert(
+          'Popup was blocked. Please allow popups for this site and try again.'
+        );
+        return;
+      }
+
+      // Show loading state
+      setSyncMessage('Waiting for Square authorization...');
+
+      // Poll for popup close and refresh status
+      const pollTimer = setInterval(() => {
+        if (popup && popup.closed) {
+          clearInterval(pollTimer);
+          setSyncMessage('Checking connection status...');
+          // Refresh connection status after OAuth completes
+          fetchStatus().then(() => {
+            setSyncMessage('');
+          });
+        }
+      }, 1000); // Reduced frequency to 1 second
+
+      // Cleanup timer after 5 minutes (timeout)
+      setTimeout(() => {
+        clearInterval(pollTimer);
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+        setSyncMessage('');
+      }, 300000);
     } catch (error) {
       console.error('Failed to initiate OAuth:', error);
+      setSyncMessage('Failed to connect to Square. Please try again.');
     }
   };
 

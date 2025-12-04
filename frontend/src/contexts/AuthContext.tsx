@@ -85,23 +85,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
    */
   useEffect(() => {
     const checkAuth = async () => {
+      console.log('[AuthContext] Checking auth...');
       const accessToken = localStorage.getItem('access_token');
+      console.log('[AuthContext] Has access token:', !!accessToken);
 
       if (!accessToken) {
+        console.log('[AuthContext] No token found, setting loading false');
         setIsLoading(false);
         return;
       }
 
       try {
+        console.log('[AuthContext] Calling /api/v1/vendors/me');
         // Verify token by fetching vendor profile
         // This will use the token from localStorage via apiClient interceptor
-        const response = await apiClient.get<Vendor>('/api/v1/auth/me');
+        const response = await apiClient.get<Vendor>('/api/v1/vendors/me');
+        console.log('[AuthContext] Auth check successful, vendor:', response.business_name);
         setVendor(response);
-      } catch (error) {
-        // Token invalid or expired - clear storage
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        setVendor(null);
+      } catch (error: any) {
+        console.error('[AuthContext] Auth check error:', error.response?.status, error.message);
+        // Only clear tokens on authentication errors (401), not network errors
+        if (error.response?.status === 401) {
+          console.log('[AuthContext] 401 error - clearing tokens');
+          // Token invalid or expired - clear storage
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('vendor_email');
+          setVendor(null);
+        } else {
+          console.log('[AuthContext] Non-401 error - treating as temporarily authenticated');
+          // For network/CORS errors, create a minimal vendor object so user isn't logged out
+          // The vendor profile will be fetched successfully on the next API call
+          const storedVendorEmail = localStorage.getItem('vendor_email');
+          if (storedVendorEmail) {
+            // Use cached vendor data if available
+            setVendor({
+              id: '', // Will be updated on next successful API call
+              email: storedVendorEmail,
+              business_name: 'Loading...',
+              subscription_tier: 'free',
+              subscription_status: 'active',
+            });
+          }
+          // Schedule a retry after a short delay
+          setTimeout(() => {
+            apiClient.get<Vendor>('/api/v1/vendors/me')
+              .then(response => {
+                console.log('[AuthContext] Retry successful, vendor:', response.business_name);
+                setVendor(response);
+              })
+              .catch(retryError => {
+                console.error('[AuthContext] Retry failed:', retryError.message);
+              });
+          }, 2000); // Retry after 2 seconds
+        }
       } finally {
         setIsLoading(false);
       }
@@ -126,6 +163,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Store tokens
       localStorage.setItem('access_token', response.access_token);
       localStorage.setItem('refresh_token', response.refresh_token);
+
+      // Cache vendor email for offline/error fallback
+      localStorage.setItem('vendor_email', response.vendor.email);
 
       // Set vendor
       setVendor(response.vendor);
@@ -165,6 +205,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       localStorage.setItem('access_token', response.access_token);
       localStorage.setItem('refresh_token', response.refresh_token);
 
+      // Cache vendor email for offline/error fallback
+      localStorage.setItem('vendor_email', response.vendor.email);
+
       // Set vendor
       setVendor(response.vendor);
     } catch (error: any) {
@@ -192,9 +235,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * Logout user.
    */
   const logout = (): void => {
-    // Clear tokens
+    // Clear tokens and cached data
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('vendor_email');
 
     // Clear vendor
     setVendor(null);
